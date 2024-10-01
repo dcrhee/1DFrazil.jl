@@ -45,6 +45,7 @@ uˢ(z) = Uˢ * exp(z / vertical_scale)
 # specify the boundary conditions (using the same approach as Near-Inertial Waves and Turbulence Driven by the Growth of Swell, Wagner)
 Qᵘ = -ρₐ/ρₒ*Cd*Uₐ^2 # m² s⁻², surface kinematic momentum flux (in time with https://www.cambridge.org/core/journals/journal-of-fluid-mechanics/article/langmuir-turbulence-in-the-ocean/638FD0E368140E5972144348DB930A38)
 u_boundary_conditions = FieldBoundaryConditions(top = FluxBoundaryCondition(Qᵘ))
+n₁_boundary_conditions = FieldBoundaryConditions(top = GradientBoundaryCondition(0))
 
 Qʰ = 40.0*(Tf - Tₐ)  # W m⁻², surface _heat_ flux
 Qᵀ = Qʰ / (ρₒ * cᴾ) # K m s⁻¹, surface _temperature_ flux
@@ -83,12 +84,37 @@ S_forcing_func(z, t, S, T, n₁, p) = S * (1-p.α) * p.ρᵢ/p.ρ * p.k * p.Nu /
 #n2_forcing_func(z, t, T, n₁, n₂, p) = - p.k*p.Nu/(p.ρᵢ*p.Lat)*(p.Tf - T) * 2π * (p.R₂ * 1/(0.9002 - 0.2634*log(p.H/(2*p.R₂)))*n₂ - p.R₁ * 1/(0.9002 - 0.2634*log(p.H/(2*p.R₁)))*n₁)/(π*p.H*(p.R₂^2 - p.R₁^2)) #∂z(n₁)
 #n3_forcing_func(z, t, T, n₂, p) = p.k*p.Nu/(p.ρᵢ*p.Lat)*(p.Tf - T) * 2π * (p.R₂ * 1/(0.9002 - 0.2634*log(p.H/(2*p.R₂)))*n₂ )/(π*p.H*(p.R₃^2 - p.R₂^2)) #∂z(n₁)
 
-function n1_forcing_func(i, j, k, grid, clock, model_fields)
-    dn_dz = -0.0001*∂z(model_fields.n₁)
+function find_Vi(H, R)
+    return π*R^2*H
+end
+
+function find_density(T, S, ρ₀, β, α)
+    ρ = ρ₀ * (1.0256550500000001 - α*T + β*S)
+    return ρ
+end
+
+function find_steady_velocity(Cd, Hᵢ, Rᵢ, ρᵢ, T, S, ρ₀, β, α)
+    ρ =  find_density(T, S, ρ₀, β, α)
+    Sᵢ = π*Rᵢ^2
+    Vᵢ = find_Vi(Hᵢ, Rᵢ)
+    u₁ = sqrt.( (2*g_Earth*Vᵢ) / (Cd*Sᵢ) * (1 - ρᵢ/ρ))
+    return uᵢ
+end
+
+function find_growth_rate()
+    G = k1*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
+    return G
+end
+
+function n1_forcing_func(i, j, k, grid, clock, model_fields, u₁)
+    dn_dz = -u₁*∂z(model_fields.n₁)
+
+    ρ = find_density(model_fields.T, model_fields.S, 1027, 0.0078, 1.67*10^(-4))
+
     return @inbounds dn_dz[i, j, k]
 end
 
-n1_forcing = Forcing(n1_forcing_func, discrete_form=true)
+n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = 0.001)
 
 T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, Rₚ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:T, :n₁))
 
@@ -106,7 +132,7 @@ buoyancy = SeawaterBuoyancy(),
 closure = SmagorinskyLilly(Pr = 1, Cb = 1 / 1),
 forcing=(n₁=n1_forcing, S=S_forcing, T=T_forcing),
 stokes_drift = UniformStokesDrift(∂z_uˢ=∂z_uˢ),
-boundary_conditions = (T=T_boundary_conditions, S=S_boundary_conditions))
+boundary_conditions = (T=T_boundary_conditions, S=S_boundary_conditions, n₁ = n₁_boundary_conditions))
 
 
 u, v, w = model.velocities
