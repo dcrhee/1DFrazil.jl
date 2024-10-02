@@ -52,38 +52,8 @@ ax_T = Axis(fig[2, 1:2];
 
 ax_S = Axis(fig[2, 3:4];
               xlabel = "S (psu)",
-              ylabel = "z (m)",
-              limits = ((minimum(time_series.S), maximum(time_series.S)), nothing))
-
-ax_C = Axis(fig[2, 5:6];
-              xlabel = "C",
-              ylabel = "z (m)",
-              limits = ((minimum(time_series.n₂), maximum(time_series.n₂)), nothing))
-
-ax_u = Axis(fig[1, 1:2];
-            xlabel = "u (m s⁻¹)",
-            ylabel = "z (m)",
-            limits = ((minimum(time_series.u), maximum(time_series.u)), nothing))
-
-ax_v = Axis(fig[1, 3:4];
-            xlabel = "v (m s⁻¹)",
-            ylabel = "z (m)",
-            limits = ((minimum(time_series.v), maximum(time_series.v)), nothing))
-
-ax_w = Axis(fig[1, 5:6];
-            xlabel = "w (m s⁻¹)",
-            ylabel = "z (m)",
-            limits = ((minimum(time_series.w), maximum(time_series.w)), nothing))
-
-ax_T = Axis(fig[2, 1:2];
-              xlabel = "T (ᵒC)",
-              ylabel = "z (m)",
-              limits = ((minimum(time_series.T), maximum(time_series.T)), nothing))
-
-ax_S = Axis(fig[2, 3:4];
-              xlabel = "S (psu)",
-              ylabel = "z (m)",
-              limits = ((minimum(time_series.S), maximum(time_series.S)), nothing))
+              ylabel = "z (m)",)
+              #limits = ((minimum(time_series.S), maximum(time_series.S)), nothing))
 
 ax_C = Axis(fig[2, 5:6];
               xlabel = "C",
