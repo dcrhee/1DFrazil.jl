@@ -10,9 +10,8 @@ using Oceananigans.AbstractOperations
 using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat # these constants can be called inside any function
 
 # need to make sure of alpha S and alpha T, check the constants and then use these constants in the functions as they are defined outside the programme
-
-# need to fix the forcing functions to include temperature dependence on density
-# defauly boundary conditions are no flux
+# try and retrive buoyancy from SeawaterBuoyancy
+# default boundary conditions are no flux
 
 # setup grid: choose 128 data points
 grid = RectilinearGrid(size=128, z=(-20, 0), topology=(Flat, Flat, Bounded))
@@ -77,7 +76,7 @@ function find_density(T, S, ρ₀ = 1027.0, β = 0.0078, α = 1.67*10^(-4))
     return ρ
 end
 
-function find_steady_velocity(T, S, Rᵢ, Hᵢ = 0.0004, ρᵢ = 920, Cd = 16)
+function find_steady_velocity(T, S, Rᵢ, Hᵢ = 0.0004)
     ρ =  find_density(T, S)
     Sᵢ = π*Rᵢ^2
     Vᵢ = find_Vi(Rᵢ, Hᵢ)
@@ -85,19 +84,19 @@ function find_steady_velocity(T, S, Rᵢ, Hᵢ = 0.0004, ρᵢ = 920, Cd = 16)
     return uᵢ
 end
 
-function find_growth_rate(T, Rᵢ, H = 0.0004, kl = 0.564, Nu = 1, ρᵢ = 920, Lat = 3.35 * 10^5, Tf = -1.6378)
+function find_growth_rate(T, Rᵢ, H = 0.0004)
     G = kl*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
     return G
 end
 
-function temperature_forcing_constant(T, S, Rᵢ, H = 0.0004, kl = 0.564, Nu = 1, ρᵢ = 920, Lat = 3.35 * 10^5, Tf = -1.6378)
+function temperature_forcing_constant(T, S, Rᵢ, H = 0.0004)
     # constant in front of each concentration
     ρ = find_density(T, S)
-    Tconstᵢ = kl*Nu/(ρ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
+    Tconstᵢ = kl*Nu/(ρ*cᴾ) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
     return Tconstᵢ
 end
 
-function salinity_forcing_constant(T, S, Rᵢ, H = 0.0004, kl = 0.564, Nu = 1, ρᵢ = 920, Lat = 3.35 * 10^5, Tf = -1.6378, αₛ = 0.31)
+function salinity_forcing_constant(T, S, Rᵢ, H = 0.0004)
     # constant in front of each concentration
     ρ = find_density(T, S)
     Sconstᵢ = S*(1-αₛ)*kl*Nu/(ρ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
@@ -166,21 +165,74 @@ function n3_forcing_func(i, j, k, grid, clock, model_fields, Rᵢ)
     end
 end
 
+function n1_forcing_func_no_rise(i, j, k, grid, clock, model_fields, Rᵢ)
+
+    # growth term
+    G₁ = find_growth_rate(model_fields.T, Rᵢ)
+    G₂ = find_growth_rate(model_fields.T, R₂)
+    V₁ = find_Vi(R₁)
+    V₂ = find_Vi(R₂)
+    if G₁[i, j, k] > 0 # growth
+        return @inbounds  - G₁[i, j, k]*model_fields.n₁[i, j, k]/(V₂ - V₁)
+    else # melt
+        return @inbounds  - (G₂[i, j, k]*model_fields.n₂[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n₁[i, j, k]/V₁)
+    end
+end
+
+function n2_forcing_func_no_rise(i, j, k, grid, clock, model_fields, Rᵢ)
+
+    # growth term
+    G₁ = find_growth_rate(model_fields.T, Rᵢ)
+    G₂ = find_growth_rate(model_fields.T, R₂)
+    G₃ = find_growth_rate(model_fields.T, R₂)
+    V₁ = find_Vi(R₁)
+    V₂ = find_Vi(R₂)
+    V₃ = find_Vi(R₃)
+    if G₁[i, j, k] > 0 # growth
+        return @inbounds  - (G₂[i, j, k]*model_fields.n₂[i, j, k]/(V₃ - V₂) - G₁[i, j, k]*model_fields.n₁[i, j, k]/(V₂ - V₁) )
+    else # melt
+        return @inbounds  - (G₃[i, j, k]*model_fields.n₃[i, j, k]/(V₃ - V₂) - G₂[i, j, k]*model_fields.n₂[i, j, k]/(V₂ - V₁) )
+    end
+end
+
+function n3_forcing_func_no_rise(i, j, k, grid, clock, model_fields, Rᵢ)
+
+    # growth term
+    G₂ = find_growth_rate(model_fields.T, R₂)
+    G₃ = find_growth_rate(model_fields.T, R₂)
+    V₂ = find_Vi(R₂)
+    V₃ = find_Vi(R₃)
+    if G₂[i, j, k] > 0 # growth
+        return @inbounds  + G₂[i, j, k]*model_fields.n₂[i, j, k]/(V₃ - V₂)
+    else # melt
+        return @inbounds + (G₃[i, j, k]*model_fields.n₃[i, j, k])/(V₃ - V₂)
+    end
+end
+
+
+
 function T_forcing_func(z, t, T, S, n₁, p)
     Tconst₁ = temperature_forcing_constant(T, S, p.R₁)
-    return 0 #Tconst₁ * n₁
+    return Tconst₁ * n₁
 end
 
 function S_forcing_func(z, t, T, S, n₁, p)
     Sconst₁ = salinity_forcing_constant(T, S, p.R₁)
-    return 0 #Sconst₁ * n₁
+    return Sconst₁ * n₁
 end
 
-n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = R₁)
-n2_forcing = Forcing(n2_forcing_func, discrete_form=true, parameters = R₂)
-n3_forcing = Forcing(n3_forcing_func, discrete_form=true, parameters = R₃)
+#n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = R₁)
+#n2_forcing = Forcing(n2_forcing_func, discrete_form=true, parameters = R₂)
+#n3_forcing = Forcing(n3_forcing_func, discrete_form=true, parameters = R₃)
+#T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁))
+#S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:S, :T, :n₁))
+
+n1_forcing = Forcing(n1_forcing_func_no_rise, discrete_form=true, parameters = R₁)
+n2_forcing = Forcing(n2_forcing_func_no_rise, discrete_form=true, parameters = R₂)
+n3_forcing = Forcing(n3_forcing_func_no_rise, discrete_form=true, parameters = R₃)
 T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁))
 S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:S, :T, :n₁))
+
 
 
 model = NonhydrostaticModel(; grid, coriolis,
@@ -201,7 +253,7 @@ u, v, w = model.velocities
 
 Ξₜ(z) = randn()  # noise
 #Tᵢ(z) = Tf + 1e-6 * Ξₜ(z)
-Tᵢ(z) = Tf + 0.01 * Ξₜ(z)
+Tᵢ(z) = Tf + 0.01 #* Ξₜ(z)
 
 u★ = sqrt(abs(Qᵘ))
 uᵢ(z) = u★ * 1e-1 * Ξ(z)
@@ -209,14 +261,14 @@ wᵢ(z) = u★ * 1e-1 * Ξ(z)
 #Cᵢ(z) = abs.(Ξ(z))*100
 
 width = 5
-nᵢ(z) = 1*exp(-(z+10)^2 / (2width^2))
+nᵢ(z) = 1e7 #1e10*exp(-(z+10)^2 / (2width^2))
 
 #wᵢ = rand(size(w)...)
 #wᵢ .-= mean(wᵢ)
 
 set!(model, w=wᵢ, T=Tᵢ, n₁ = nᵢ, n₂ = nᵢ, n₃ = nᵢ, S=35)
 
-simulation = Simulation(model, Δt=5.0, stop_time=1hours)
+simulation = Simulation(model, Δt=1.0, stop_time=20hours)
 
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute)
 

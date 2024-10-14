@@ -1,6 +1,9 @@
 using CairoMakie
 using JLD2
 
+# change to number density * crystal volume
+# turn off rise
+
 Uₐ =  5 # m/s specify the wind strength
 Fetch = 1500 # m wind fetch
 Tₐ = -20 # atmosphere temperature
@@ -15,9 +18,13 @@ time_series = (;
      S = FieldTimeSeries("1D_fields"* end_name * ".jld2", "S"),
      n₁ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₁"),
      n₂ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₂"),
-     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₃"))
+     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₃"),
+     )
 
 times = time_series.w.times
+
+ΔT = time_series.T[1, 1, :, :] .- time_series.T[1, 1, :, 1]
+ΔS =  time_series.S[1, 1, :, :] .- time_series.S[1, 1, :, 1]
 
 xw, yw, zw = nodes(time_series.w)
 xu, yu, zu = nodes(time_series.u)
@@ -30,15 +37,15 @@ n = Observable(1)
 
 fig = Figure(size = (850, 850))
 
-ax_u = Axis(fig[1, 1:2];
-            xlabel = "u (m s⁻¹)",
+ax_ΔT = Axis(fig[1, 1:2];
+            xlabel = "ΔT (ᵒC)",
             ylabel = "z (m)",
-            limits = ((minimum(time_series.u), maximum(time_series.u)), nothing))
+            limits = ((minimum(ΔT), maximum(ΔT)), nothing))
 
-ax_v = Axis(fig[1, 3:4];
-            xlabel = "v (m s⁻¹)",
+ax_ΔS = Axis(fig[1, 3:4];
+            xlabel = "ΔS (ppt)",
             ylabel = "z (m)",
-            limits = ((minimum(time_series.v), maximum(time_series.v)), nothing))
+            limits = ((minimum(ΔS), maximum(ΔS)), nothing))
 
 ax_w = Axis(fig[1, 5:6];
             xlabel = "w (m s⁻¹)",
@@ -68,9 +75,11 @@ Sₙ = @lift time_series.S[$n][1, 1, :]
 n₁ₙ = @lift time_series.n₁[$n][1, 1, :]
 n₂ₙ = @lift time_series.n₂[$n][1, 1, :]
 n₃ₙ = @lift time_series.n₃[$n][1, 1, :]
+ΔTₙ = @lift time_series.T[$n][1, 1, :] - time_series.T[1][1, 1, :]
+ΔSₙ = @lift time_series.S[$n][1, 1, :] - time_series.S[1][1, 1, :]
 
-lines!(ax_u, uₙ, zu)
-lines!(ax_v, vₙ, zv)
+lines!(ax_ΔT, ΔTₙ, zT)
+lines!(ax_ΔS, ΔSₙ, zS)
 lines!(ax_w, wₙ, zw)
 lines!(ax_T, Tₙ, zT)
 lines!(ax_S, Sₙ, zS)
