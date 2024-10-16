@@ -7,11 +7,13 @@ using Oceananigans.AbstractOperations: ∂z
 using Printf
 using Statistics
 using Oceananigans.AbstractOperations
-using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat # these constants can be called inside any function
+using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ # these constants can be called inside any function
 
 # need to make sure of alpha S and alpha T, check the constants and then use these constants in the functions as they are defined outside the programme
 # try and retrive buoyancy from SeawaterBuoyancy
 # default boundary conditions are no flux
+
+# the salf forcing function is only dependent on n1
 
 # setup grid: choose 128 data points
 grid = RectilinearGrid(size=128, z=(-20, 0), topology=(Flat, Flat, Bounded))
@@ -134,7 +136,7 @@ function n2_forcing_func(i, j, k, grid, clock, model_fields, Rᵢ)
     # growth term
     G₁ = find_growth_rate(model_fields.T, Rᵢ)
     G₂ = find_growth_rate(model_fields.T, R₂)
-    G₃ = find_growth_rate(model_fields.T, R₂)
+    G₃ = find_growth_rate(model_fields.T, R₃)
     V₁ = find_Vi(R₁)
     V₂ = find_Vi(R₂)
     V₃ = find_Vi(R₃)
@@ -155,7 +157,7 @@ function n3_forcing_func(i, j, k, grid, clock, model_fields, Rᵢ)
 
     # growth term
     G₂ = find_growth_rate(model_fields.T, R₂)
-    G₃ = find_growth_rate(model_fields.T, R₂)
+    G₃ = find_growth_rate(model_fields.T, R₃)
     V₂ = find_Vi(R₂)
     V₃ = find_Vi(R₃)
     if G₂[i, j, k] > 0 # growth
@@ -168,7 +170,7 @@ end
 function n1_forcing_func_no_rise(i, j, k, grid, clock, model_fields, Rᵢ)
 
     # growth term
-    G₁ = find_growth_rate(model_fields.T, Rᵢ)
+    G₁ = find_growth_rate(model_fields.T, R₁)
     G₂ = find_growth_rate(model_fields.T, R₂)
     V₁ = find_Vi(R₁)
     V₂ = find_Vi(R₂)
@@ -182,9 +184,9 @@ end
 function n2_forcing_func_no_rise(i, j, k, grid, clock, model_fields, Rᵢ)
 
     # growth term
-    G₁ = find_growth_rate(model_fields.T, Rᵢ)
+    G₁ = find_growth_rate(model_fields.T, R₁)
     G₂ = find_growth_rate(model_fields.T, R₂)
-    G₃ = find_growth_rate(model_fields.T, R₂)
+    G₃ = find_growth_rate(model_fields.T, R₃)
     V₁ = find_Vi(R₁)
     V₂ = find_Vi(R₂)
     V₃ = find_Vi(R₃)
@@ -199,7 +201,7 @@ function n3_forcing_func_no_rise(i, j, k, grid, clock, model_fields, Rᵢ)
 
     # growth term
     G₂ = find_growth_rate(model_fields.T, R₂)
-    G₃ = find_growth_rate(model_fields.T, R₂)
+    G₃ = find_growth_rate(model_fields.T, R₃)
     V₂ = find_Vi(R₂)
     V₃ = find_Vi(R₃)
     if G₂[i, j, k] > 0 # growth
@@ -211,14 +213,18 @@ end
 
 
 
-function T_forcing_func(z, t, T, S, n₁, p)
+function T_forcing_func(z, t, T, S, n₁, n₂, n₃, p)
     Tconst₁ = temperature_forcing_constant(T, S, p.R₁)
-    return Tconst₁ * n₁
+    Tconst₂ = temperature_forcing_constant(T, S, p.R₂)
+    Tconst₃ = temperature_forcing_constant(T, S, p.R₃)
+    return Tconst₁ * n₁ + Tconst₂ * n₂ + Tconst₃ * n₃
 end
 
-function S_forcing_func(z, t, T, S, n₁, p)
+function S_forcing_func(z, t, T, S, n₁, n₂, n₃, p)
     Sconst₁ = salinity_forcing_constant(T, S, p.R₁)
-    return Sconst₁ * n₁
+    Sconst₂ = salinity_forcing_constant(T, S, p.R₂)
+    Sconst₃ = salinity_forcing_constant(T, S, p.R₃)
+    return Sconst₁ * n₁ + + Sconst₂ * n₂ + Sconst₃ * n₃
 end
 
 #n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = R₁)
@@ -230,8 +236,8 @@ end
 n1_forcing = Forcing(n1_forcing_func_no_rise, discrete_form=true, parameters = R₁)
 n2_forcing = Forcing(n2_forcing_func_no_rise, discrete_form=true, parameters = R₂)
 n3_forcing = Forcing(n3_forcing_func_no_rise, discrete_form=true, parameters = R₃)
-T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁))
-S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:S, :T, :n₁))
+T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, R₁ = R₁, R₂ = R₂, R₃ = R₃, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁, :n₂, :n₃))
+S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = R₁, R₂ = R₂, R₃ = R₃, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁, :n₂, :n₃))
 
 
 
@@ -253,7 +259,7 @@ u, v, w = model.velocities
 
 Ξₜ(z) = randn()  # noise
 #Tᵢ(z) = Tf + 1e-6 * Ξₜ(z)
-Tᵢ(z) = Tf + 0.01 #* Ξₜ(z)
+Tᵢ(z) = Tf - 0.01 #* Ξₜ(z)
 
 u★ = sqrt(abs(Qᵘ))
 uᵢ(z) = u★ * 1e-1 * Ξ(z)
@@ -268,7 +274,7 @@ nᵢ(z) = 1e7 #1e10*exp(-(z+10)^2 / (2width^2))
 
 set!(model, w=wᵢ, T=Tᵢ, n₁ = nᵢ, n₂ = nᵢ, n₃ = nᵢ, S=35)
 
-simulation = Simulation(model, Δt=1.0, stop_time=20hours)
+simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
 
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute)
 
@@ -291,7 +297,7 @@ end
 
 simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
-output_interval = 5minutes
+output_interval = 0.1minutes
 
 fields_to_output = merge(model.velocities, model.tracers, (; νₑ=model.diffusivity_fields.νₑ))
 

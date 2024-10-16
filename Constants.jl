@@ -1,6 +1,6 @@
 # defines all the constants
 module Constants
-export Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, Nu, kl, α, Lat
+export Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, Nu, kl, α, Lat, αₛ
 
 const Tf = -1.6378 # freezing temperature
 
@@ -20,5 +20,7 @@ const kl = 0.564
 const α = 0.31
 
 const Lat = 3.35 * 10^5
+
+const αₛ = 0.31
 
 end;
