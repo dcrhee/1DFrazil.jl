@@ -13,7 +13,20 @@ R₁ = 0.001
 R₂ = 0.002
 R₃ = 0.003
 
-end_name = "_Ta_" * string(Tₐ) * "_X_" * string(Fetch) * "_Ua_" * string(Uₐ)
+#end_name = "_Ta_" * string(Tₐ) * "_X_" * string(Fetch) * "_Ua_" * string(Uₐ)
+end_name = "no_vel"
+
+
+#time_series = (;
+#     w = FieldTimeSeries("1D_fields"* end_name * ".jld2", "w"),
+#     u = FieldTimeSeries("1D_fields"* end_name * ".jld2", "u"),
+#     v = FieldTimeSeries("1D_fields"* end_name * ".jld2", "v"),
+#     T = FieldTimeSeries("1D_fields"* end_name * ".jld2", "T"),
+#     S = FieldTimeSeries("1D_fields"* end_name * ".jld2", "S"),
+#     n₁ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₁"),
+#     n₂ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₂"),
+#     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₃"),
+#     )
 
 time_series = (;
      w = FieldTimeSeries("1D_fields"* end_name * ".jld2", "w"),
@@ -21,9 +34,9 @@ time_series = (;
      v = FieldTimeSeries("1D_fields"* end_name * ".jld2", "v"),
      T = FieldTimeSeries("1D_fields"* end_name * ".jld2", "T"),
      S = FieldTimeSeries("1D_fields"* end_name * ".jld2", "S"),
-     n₁ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₁"),
-     n₂ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₂"),
-     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₃"),
+     n₁ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n1"),
+     n₂ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n2"),
+     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n3"),
      )
 
 times = time_series.w.times

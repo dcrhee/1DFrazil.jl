@@ -227,19 +227,12 @@ function S_forcing_func(z, t, T, S, n₁, n₂, n₃, p)
     return Sconst₁ * n₁ + + Sconst₂ * n₂ + Sconst₃ * n₃
 end
 
-#n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = R₁)
-#n2_forcing = Forcing(n2_forcing_func, discrete_form=true, parameters = R₂)
-#n3_forcing = Forcing(n3_forcing_func, discrete_form=true, parameters = R₃)
-#T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁))
-#S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = R₁, H = 0.0004, Tf = Tf), field_dependencies=(:S, :T, :n₁))
 
 n1_forcing = Forcing(n1_forcing_func_no_rise, discrete_form=true, parameters = R₁)
 n2_forcing = Forcing(n2_forcing_func_no_rise, discrete_form=true, parameters = R₂)
 n3_forcing = Forcing(n3_forcing_func_no_rise, discrete_form=true, parameters = R₃)
 T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, R₁ = R₁, R₂ = R₂, R₃ = R₃, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁, :n₂, :n₃))
 S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = R₁, R₂ = R₂, R₃ = R₃, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁, :n₂, :n₃))
-
-
 
 model = NonhydrostaticModel(; grid, coriolis,
 advection = WENO(),
@@ -267,7 +260,7 @@ wᵢ(z) = u★ * 1e-1 * Ξ(z)
 #Cᵢ(z) = abs.(Ξ(z))*100
 
 width = 5
-nᵢ(z) = 1e7 #1e10*exp(-(z+10)^2 / (2width^2))
+nᵢ(z) = 1e10*exp(-(z+10)^2 / (2width^2))
 
 #wᵢ = rand(size(w)...)
 #wᵢ .-= mean(wᵢ)

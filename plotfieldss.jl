@@ -9,6 +9,18 @@ Fetch = 1500 # m wind fetch
 Tₐ = -20 # atmosphere temperature
 
 end_name = "_Ta_" * string(Tₐ) * "_X_" * string(Fetch) * "_Ua_" * string(Uₐ)
+end_name = "no_vel"
+
+#time_series = (;
+#     w = FieldTimeSeries("1D_fields"* end_name * ".jld2", "w"),
+#     u = FieldTimeSeries("1D_fields"* end_name * ".jld2", "u"),
+#     v = FieldTimeSeries("1D_fields"* end_name * ".jld2", "v"),
+#     T = FieldTimeSeries("1D_fields"* end_name * ".jld2", "T"),
+#     S = FieldTimeSeries("1D_fields"* end_name * ".jld2", "S"),
+#     n₁ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₁"),
+#     n₂ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₂"),
+#     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₃"),
+#     )
 
 time_series = (;
      w = FieldTimeSeries("1D_fields"* end_name * ".jld2", "w"),
@@ -16,9 +28,9 @@ time_series = (;
      v = FieldTimeSeries("1D_fields"* end_name * ".jld2", "v"),
      T = FieldTimeSeries("1D_fields"* end_name * ".jld2", "T"),
      S = FieldTimeSeries("1D_fields"* end_name * ".jld2", "S"),
-     n₁ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₁"),
-     n₂ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₂"),
-     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n₃"),
+     n₁ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n1"),
+     n₂ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n2"),
+     n₃ = FieldTimeSeries("1D_fields"* end_name * ".jld2", "n3"),
      )
 
 times = time_series.w.times
@@ -49,8 +61,8 @@ ax_ΔS = Axis(fig[1, 3:4];
 
 ax_w = Axis(fig[1, 5:6];
             xlabel = "w (m s⁻¹)",
-            ylabel = "z (m)",
-            limits = ((minimum(time_series.w), maximum(time_series.w)), nothing))
+            ylabel = "z (m)",)
+            #limits = ((minimum(time_series.w), maximum(time_series.w)), nothing))
 
 ax_T = Axis(fig[2, 1:2];
               xlabel = "T (ᵒC)",
@@ -65,7 +77,8 @@ ax_S = Axis(fig[2, 3:4];
 ax_C = Axis(fig[2, 5:6];
               xlabel = "C",
               ylabel = "z (m)",
-              limits = ((minimum(time_series.n₂), maximum(time_series.n₂)), nothing))
+              limits = ((minimum(time_series.n₁), maximum(time_series.n₁)), nothing))
+
 
 uₙ = @lift time_series.u[$n][1, 1, :]
 vₙ = @lift time_series.v[$n][1, 1, :]
@@ -93,6 +106,6 @@ fig
 
 frames = 1:length(times)
 
-record(fig, "test.mp4", frames, framerate=8) do i
+record(fig, "novel.mp4", frames, framerate=8) do i
     n[] = i
 end
