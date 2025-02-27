@@ -11,9 +11,9 @@ using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ, gra
 
 # setup grid: choose 128 data points
 depth = 0.20
-numz = 3 #128
-#grid = RectilinearGrid(size=(1, 1, numz), x=(0, 1), y=(0, 1), z=(-1, 0))
-grid = RectilinearGrid(size=numz, z=(-depth, 0), topology=(Flat, Flat, Bounded))
+numz = 1 #128
+#grid = RegularRectilinearGrid(size=(1, 1, 1), extent=(1.0, 1.0, 1.0))
+grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
 
 # constants/parameters
@@ -127,12 +127,13 @@ end
 
 function find_steady_velocity(indx)
     #uᵢ = 30*Rᵢ^(1.2)
-    uᵢ = vgs(indx)
+    uᵢ = vgs[indx]
     return uᵢ
 end
 
 function find_growth_rate(T, Rᵢ, H)
-    G = kl*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
+    #G = kl*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
+    G = kl*Nu/(ρᵢ*Lat) * (Tf - T) * 2π * H
     return G
 end
 
@@ -309,9 +310,9 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
 
     # Apply logic for growth and melting
     if G_im1[i, j, k] > 0  # Growth case
-        return @inbounds - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] #udn_dz[i, j, k] - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
+        return @inbounds - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) #+ dn_coll[i, j, k] #udn_dz[i, j, k] - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
     else  # Melt case
-        return @inbounds - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] #udn_dz[i, j, k] - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
+        return @inbounds - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) #+ dn_coll[i, j, k] #udn_dz[i, j, k] - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
     end
 end
 
@@ -387,9 +388,9 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #print("n1", maximum(dn_coll))
 
     if G₁[i, j, k] > 0 # growth
-        return @inbounds  - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) + dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁)
+        return @inbounds  - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) #+ dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁)
     else # melt
-        return @inbounds  - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁)
+        return @inbounds  - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) #+ dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁)
     end
 end
 
@@ -457,26 +458,26 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
     end
 
     if G₂[i, j, k] > 0 # growth
-        return @inbounds  G₂[i, j, k]*model_fields.n2[i, j, k]/(Vᵢ - V₂) + dn_coll[i, j, k] #udn_dz[i, j, k] + G₂[i, j, k]*model_fields.n2[i, j, k]/(V₃ - V₂)
+        return @inbounds  G₂[i, j, k]*model_fields.n2[i, j, k]/(Vᵢ - V₂) #+ dn_coll[i, j, k] #udn_dz[i, j, k] + G₂[i, j, k]*model_fields.n2[i, j, k]/(V₃ - V₂)
     else # melt
-        return @inbounds  (G₃[i, j, k]*model_fields.n3[i, j, k])/(Vᵢ - V₂) + dn_coll[i, j, k] # udn_dz[i, j, k] + (G₃[i, j, k]*model_fields.n3[i, j, k])/(V₃ - V₂)
+        return @inbounds  (G₃[i, j, k]*model_fields.n3[i, j, k])/(Vᵢ - V₂) #+ dn_coll[i, j, k] # udn_dz[i, j, k] + (G₃[i, j, k]*model_fields.n3[i, j, k])/(V₃ - V₂)
     end
 
     #print("n3", maximum(dn_coll))
 end
 
-function T_forcing_func(z, t, T, S, n₁, n₂, n₃) #, n₄, n₅, n₆, n₇, n₈, n₉, n10)
+function T_forcing_func(z, t, T, S, n₁, n₂, n₃, n₄, n₅, n₆, n₇, n₈, n₉, n10)
     Tconst₁ = temperature_forcing_constant(T, S, 1)
     Tconst₂ = temperature_forcing_constant(T, S, 2)
     Tconst₃ = temperature_forcing_constant(T, S, 3)
-    #Tconst4 = temperature_forcing_constant(T, S, 4)
-    #Tconst5 = temperature_forcing_constant(T, S, 5)
-    #Tconst6 = temperature_forcing_constant(T, S, 6)
-    #Tconst7 = temperature_forcing_constant(T, S, 7)
-    #Tconst8 = temperature_forcing_constant(T, S, 8)
-    #Tconst9 = temperature_forcing_constant(T, S, 9)
-    #Tconst10 = temperature_forcing_constant(T, S, 10)
-    return Tconst₁ * n₁ + Tconst₂ * n₂ + Tconst₃ * n₃# + Tconst4 * n₄ + Tconst5 * n₅ + Tconst6 * n₆ + Tconst7 * n₇ + Tconst8 * n₈ + Tconst9 * n₉ + Tconst10 * n10
+    Tconst4 = temperature_forcing_constant(T, S, 4)
+    Tconst5 = temperature_forcing_constant(T, S, 5)
+    Tconst6 = temperature_forcing_constant(T, S, 6)
+    Tconst7 = temperature_forcing_constant(T, S, 7)
+    Tconst8 = temperature_forcing_constant(T, S, 8)
+    Tconst9 = temperature_forcing_constant(T, S, 9)
+    Tconst10 = temperature_forcing_constant(T, S, 10)
+    return Tconst₁ * n₁ + Tconst₂ * n₂ + Tconst₃ * n₃ + Tconst4 * n₄ + Tconst5 * n₅ + Tconst6 * n₆ + Tconst7 * n₇ + Tconst8 * n₈ + Tconst9 * n₉ + Tconst10 * n10
 end
 
 function S_forcing_func(z, t, T, S, n1, n2, n3)
@@ -496,18 +497,14 @@ n7_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters 
 n8_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 8)
 n9_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 9)
 n10_forcing = Forcing(nend_forcing_func, discrete_form=true, parameters = 10)
-T_forcing = Forcing(T_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3)) #, :n4, :n5, :n6, :n7, :n8, :n9, :n10))
+T_forcing = Forcing(T_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3, :n4, :n5, :n6, :n7, :n8, :n9, :n10))
 #S_forcing = Forcing(S_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3))
 
-model = NonhydrostaticModel(; grid, coriolis,
-advection = WENO(),
+model = NonhydrostaticModel(; grid,
+advection = Centered(), #WENO(),
 timestepper = :RungeKutta3,
-#tracers = (:T, :S, :n1, :n2, :n3),
 buoyancy = SeawaterBuoyancy(),
-closure = SmagorinskyLilly(Pr = 1, Cb = 1 / 1),
-
-#model = NonhydrostaticModel(; grid, coriolis,
-#timestepper = :RungeKutta3,
+#closure = SmagorinskyLilly(Pr = 1, Cb = 1 / 1),
 tracers = (:T, :S, :n1, :n2, :n3, :n4, :n5, :n6, :n7, :n8, :n9, :n10),
 #buoyancy = SeawaterBuoyancy(),
 forcing=(n1=n1_forcing, n2=n2_forcing, n3=n3_forcing, n4=n4_forcing, n5=n5_forcing, n6=n6_forcing, n7=n7_forcing, n8=n8_forcing, n9=n9_forcing, n10=n10_forcing, T=T_forcing)) #,
@@ -517,16 +514,17 @@ u, v, w = model.velocities
 nᵢₙ = Cᵢₙ * aspect_ratio * volume / (2 * π * length(Rs)) * 1 ./ Rs.^3
 
 # set the initial conditions
-Tᵢ = Tf - 2e-4 #* Ξₜ(z)
+Tᵢ = Tf - 1e-4 #* Ξₜ(z)
 set!(model, u=0, v=0, w=0, T=Tᵢ, n1 = nᵢₙ[1], n2 = nᵢₙ[2], n3 = nᵢₙ[3], n4 = nᵢₙ[4], n5 = nᵢₙ[5], n6 = nᵢₙ[6], n7 = nᵢₙ[7], n8 = nᵢₙ[8], n9 = nᵢₙ[9], n10 = nᵢₙ[10], S=34.5)
 
-simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
+simulation = Simulation(model, Δt=1.0, stop_time=72hours)
 
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute)
 
 
 function progress(simulation)
     u, v, w = simulation.model.velocities
+    T = simulation.model.tracers.T
     n1 = simulation.model.tracers.n1
     n2 = simulation.model.tracers.n2
     n3 = simulation.model.tracers.n3
@@ -540,12 +538,14 @@ function progress(simulation)
 
     # Print a progress message
     #msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, wall time: %s\n",
-    msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, n1 = %.1e, n2 = %.1e, n3 = %.1e, wall time: %s\n",
+    msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, n1 = %.1e, n2 = %.1e, n3 = %.1e, n4 = %.1e, n5 = %.1e, n6 = %.1e, n7 = %.1e, n8 = %.1e, n9 = %.1e, n10 = %.1e, Tmin = %.5f, Tmax = %.5f, wall time: %s\n",
     iteration(simulation),
     prettytime(time(simulation)),
     prettytime(simulation.Δt),
     maximum(abs, u), maximum(abs, v), maximum(abs, w),
-    minimum(n1), minimum(n2), minimum(n3), 
+    minimum(n1), minimum(n2), minimum(n3), minimum(n4), minimum(n5), minimum(n6), minimum(n7), minimum(n8), minimum(n9), minimum(n10), 
+    #maximum(n1), maximum(n2), maximum(n3), maximum(n4), maximum(n5), maximum(n6), maximum(n7), maximum(n8), maximum(n9), maximum(n10), 
+    minimum(T), maximum(T),
     prettytime(simulation.run_wall_time))
 
     @info msg
@@ -555,7 +555,7 @@ end
 
 simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
-output_interval = 0.1minutes
+output_interval = 1minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 
