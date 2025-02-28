@@ -106,6 +106,7 @@ end_name = "match_Feltham"
 collision_velocity_parameterisation_num = 1 # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = 1 # 1 is mean n, 2 is sum over nj
 crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
+effective_radius = true # add in their effective radius
 
 #n1_boundary_conditions = FieldBoundaryConditions(top = GradientBoundaryCondition(0))
 #n2_boundary_conditions = FieldBoundaryConditions(top = GradientBoundaryCondition(0))
@@ -210,23 +211,47 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
                 nRindx = getfield(model_fields, Symbol("n$Rindx"))
                 uRindx = find_steady_velocity(Rindx) # find rise velocity of crystal j
                 if collision_velocity_parameterisation_num == 2
-                    vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
+                    if effective_radius
+                        vₜ = (3/(2*aspect_ratio))^(1/3)*sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
+                    else
+                        vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
+                    end
                 else
-                    vₜ = sqrt(ϵ/(15ν))*(Rs[indx] + Rs[Rindx]) # spherical approximation
+                    if effective_radius
+                        vₜ = (3/(2*aspect_ratio))^(1/3)*sqrt(ϵ/(15ν))*(Rs[indx] + Rs[Rindx]) # spherical approximation
+                    else
+                        vₜ = sqrt(ϵ/(15ν))*(Rs[indx] + Rs[Rindx]) # spherical approximation
+                    end
                 end
                 vcoll = find_vcoll(uRindx - uᵢ, vₜ)
                 if collision_velocity_parameterisation_num == 3
-                    Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    if effective_radius
+                        Fenc .+= (3/(2*aspect_ratio))^(2/3)*2*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    else
+                        Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    end
                 else
-                    Fenc .+= π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    if effective_radius 
+                        Fenc .+= (3/(2*aspect_ratio))^(2/3)*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    else
+                        Fenc .+= π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    end
                 end
             end    
         else
             Fenc = zeros(1, 1, numz)
             if collision_velocity_parameterisation_num == 2
-                vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[indx]) # cylindrical approximation
+                if effective_radius
+                    vₜ = (3/(2*aspect_ratio))^(1/3)*sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[indx]) # cylindrical approximation
+                else
+                    vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[indx]) # cylindrical approximation
+                end
             else
-                vₜ = sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
+                if effective_radius
+                    vₜ = (3/(2*aspect_ratio))^(1/3)*sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
+                else
+                    vₜ = sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
+                end
             end
             vcoll = find_vcoll(uᵢ, vₜ)
             nTotal = zeros(1, 1, numz)
@@ -237,9 +262,17 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
             ntot = min.(nTotal, nmax)
 
             if collision_velocity_parameterisation_num == 3
-                Fenc = 2*π*(Rs[indx])^2 * vcoll * ntot
+                if effective_radius
+                    Fenc =  (3/(2*aspect_ratio))^(2/3)*2*π*(Rs[indx])^2 * vcoll * ntot
+                else
+                    Fenc = 2*π*(Rs[indx])^2 * vcoll * ntot
+                end
             else
-                Fenc = π*(Rs[indx])^2 * vcoll * ntot
+                if effective_radius
+                    Fenc = (3/(2*aspect_ratio))^(2/3)*π*(Rs[indx])^2 * vcoll * ntot
+                else
+                    Fenc = π*(Rs[indx])^2 * vcoll * ntot
+                end
             end
         end
         Fcoll = Fenc .* nᵢ
@@ -262,23 +295,47 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
                     nRindx = getfield(model_fields, Symbol("n$Rindx"))
                     uRindx = find_steady_velocity(Rindx) # find rise velocity of crystal j
                     if collision_velocity_parameterisation_num == 2
-                        vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[β] + Rs[Rindx]) # cylindrical approximation
+                        if effective_radius
+                            vₜ = (3/(2*aspect_ratio))^(1/3)*sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[β] + Rs[Rindx]) # cylindrical approximation
+                        else
+                            vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[β] + Rs[Rindx]) # cylindrical approximation
+                        end
                     else
-                        vₜ = sqrt(ϵ/(15ν))*(Rs[β] + Rs[Rindx]) # spherical approximation
+                        if effective_radius
+                            vₜ = (3/(2*aspect_ratio))^(1/3)*sqrt(ϵ/(15ν))*(Rs[β] + Rs[Rindx]) # spherical approximation
+                        else
+                            vₜ = sqrt(ϵ/(15ν))*(Rs[β] + Rs[Rindx]) # spherical approximation
+                        end
                     end
                     vcoll = find_vcoll(uRindx - uᵦ, vₜ)
                     if collision_velocity_parameterisation_num == 3
-                        Fenc .+= 2*π*(Rs[β] + Rs[Rindx])^2*nRindx * vcoll
+                        if effective_radius
+                            Fenc .+= (3/(2*aspect_ratio))^(2/3) * 2*π*(Rs[β] + Rs[Rindx])^2*nRindx * vcoll
+                        else
+                            Fenc .+= 2*π*(Rs[β] + Rs[Rindx])^2*nRindx * vcoll
+                        end
                     else
-                        Fenc .+= π*(Rs[β] + Rs[Rindx])^2*nRindx * vcoll
+                        if effective_radius
+                            Fenc .+= (3/(2*aspect_ratio))^(2/3) * π*(Rs[β] + Rs[Rindx])^2*nRindx * vcoll
+                        else
+                            Fenc .+= π*(Rs[β] + Rs[Rindx])^2*nRindx * vcoll
+                        end
                     end
                 end    
             else
                 Fenc = zeros(1, 1, numz)
                 if collision_velocity_parameterisation_num == 2
-                    vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[β]) # cylindrical approximation
+                    if effective_radius
+                        vₜ = (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[β]) # cylindrical approximation
+                    else
+                        vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[β]) # cylindrical approximation
+                    end
                 else
-                    vₜ = sqrt(ϵ/(15ν))*(2*Rs[β]) # spherical approximation
+                    if effective_radius
+                        vₜ = (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν))*(2*Rs[β]) # spherical approximation
+                    else
+                        vₜ = sqrt(ϵ/(15ν))*(2*Rs[β]) # spherical approximation
+                    end
                 end
                 vcoll = find_vcoll(uᵦ, vₜ)
                 nTotal = zeros(1, 1, numz)
@@ -289,9 +346,17 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
                 ntot = min.(nTotal, nmax)
 
                 if collision_velocity_parameterisation_num == 3
-                    Fencᵦ = 2*π*(Rs[β])^2 * vcoll * ntot
+                    if effective_radius
+                        Fencᵦ = (3/(2*aspect_ratio))^(2/3) *  2*π*(Rs[β])^2 * vcoll * ntot
+                    else
+                        Fencᵦ = 2*π*(Rs[β])^2 * vcoll * ntot
+                    end
                 else
-                    Fencᵦ = π*(Rs[β])^2 * vcoll * ntot
+                    if effective_radius
+                        Fencᵦ = (3/(2*aspect_ratio))^(2/3) *  π*(Rs[β])^2 * vcoll * ntot
+                    else
+                        Fencᵦ = π*(Rs[β])^2 * vcoll * ntot
+                    end
                 end
             end
             Fcollᵦ = Fencᵦ .* nᵦ
@@ -304,15 +369,15 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     if crystal_size_collision_redistribution == 1
         dn_coll = - V₁/Vᵢ * Fcoll/volume
     else
-        dn_coll = (αVolconst[indx] * Fcoll .+ βVolconst[indx] * Fcollᵦ)//volume
+        dn_coll = (αVolconst[indx] * Fcoll .+ βVolconst[indx] * Fcollᵦ)/volume
     end
     #print("n2", maximum(dn_coll))
 
     # Apply logic for growth and melting
     if G_im1[i, j, k] > 0  # Growth case
-        return @inbounds - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) #+ dn_coll[i, j, k] #udn_dz[i, j, k] - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
+        return @inbounds - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] #udn_dz[i, j, k] - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
     else  # Melt case
-        return @inbounds - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) #+ dn_coll[i, j, k] #udn_dz[i, j, k] - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
+        return @inbounds - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] #udn_dz[i, j, k] - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
     end
 end
 
@@ -331,36 +396,60 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     if concentration_parameterisation_num == 1
         Fenc = zeros(1, 1, numz)
         Fcollsum =  zeros(1, 1, numz)
-        for jindx in eachindex(Rs)
+        for jindx in 2:lastindex(Rs)
             uⱼ = find_steady_velocity(jindx)
             nⱼ = getfield(model_fields, Symbol("n$jindx"))  # Dynamically get field `nᵢ`
             for Rindx in eachindex(Rs)
                 nRindx = getfield(model_fields, Symbol("n$Rindx"))
                 uRindx = find_steady_velocity(Rindx) # find rise velocity of crystal j
                 if collision_velocity_parameterisation_num == 2
-                    vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[jindx] + Rs[Rindx]) # cylindrical approximation
+                    if effective_radius 
+                        vₜ = (3/(2*aspect_ratio))^(1/3) *  sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[jindx] + Rs[Rindx]) # cylindrical approximation
+                    else
+                        vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[jindx] + Rs[Rindx]) # cylindrical approximation
+                    end
                 else
-                    vₜ = sqrt(ϵ/(15ν))*(Rs[jindx] + Rs[Rindx]) # spherical approximation
+                    if effective_radius
+                        vₜ = (3/(2*aspect_ratio))^(1/3) *  sqrt(ϵ/(15ν))*(Rs[jindx] + Rs[Rindx]) # spherical approximation
+                    else
+                        vₜ = sqrt(ϵ/(15ν))*(Rs[jindx] + Rs[Rindx]) # spherical approximation
+                    end
                 end
                 vcoll = find_vcoll(uRindx - uⱼ, vₜ)
                 if collision_velocity_parameterisation_num == 3
-                    Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    if effective_radius
+                        Fenc .+=  (3/(2*aspect_ratio))^(2/3) * 2*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    else
+                        Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    end
                 else
-                    Fenc .+= π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    if effective_radius
+                        Fenc .+= (3/(2*aspect_ratio))^(2/3) *  π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    else
+                        Fenc .+= π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                    end
                 end
             end  
-            Fcollsum .+= Fcollsum .+ Fenc .* nⱼ
+            Fcollsum = Fcollsum .+ Fenc .* nⱼ
         end  
     else
         Fenc = zeros(1, 1, numz)
         Fcollsum =  zeros(1, 1, numz)
-        for jindx in eachindex(Rs)
+        for jindx in 2:lastindex(Rs)
             uⱼ = find_steady_velocity(jindx)
             nⱼ = getfield(model_fields, Symbol("n$jindx"))  # Dynamically get field `nᵢ`
             if collision_velocity_parameterisation_num == 2
-                vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[jindx]) # cylindrical approximation
+                if effective_radius
+                    vₜ = (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[jindx]) # cylindrical approximation
+                else
+                    vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[jindx]) # cylindrical approximation
+                end
             else
-                vₜ = sqrt(ϵ/(15ν))*(2*Rs[jindx]) # spherical approximation
+                if effective_radius
+                    vₜ = (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν))*(2*Rs[jindx]) # spherical approximation
+                else
+                    vₜ = sqrt(ϵ/(15ν))*(2*Rs[jindx]) # spherical approximation
+                end
             end
             vcoll = find_vcoll(uⱼ, vₜ)
             nTotal = zeros(1, 1, numz)
@@ -371,11 +460,19 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
             ntot = min.(nTotal, nmax)
 
             if collision_velocity_parameterisation_num == 3
-                Fenc = 2*π*(Rs[jindx])^2 * vcoll * ntot
+                if effective_radius
+                    Fenc = (3/(2*aspect_ratio))^(2/3) * 2*π*(Rs[jindx])^2 * vcoll * ntot
+                else
+                    Fenc = 2*π*(Rs[jindx])^2 * vcoll * ntot
+                end
             else
-                Fenc = π*(Rs[jindx])^2 * vcoll * ntot
+                if effective_radius
+                    Fenc =  (3/(2*aspect_ratio))^(2/3) *  π*(Rs[jindx])^2 * vcoll * ntot
+                else
+                    Fenc = π*(Rs[jindx])^2 * vcoll * ntot
+                end
             end
-            Fcollsum .+= Fcollsum .+ Fenc .* nⱼ
+            Fcollsum = Fcollsum .+ Fenc .* nⱼ
         end
     end
 
@@ -388,9 +485,9 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #print("n1", maximum(dn_coll))
 
     if G₁[i, j, k] > 0 # growth
-        return @inbounds  - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) #+ dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁)
+        return @inbounds  - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) + dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁)
     else # melt
-        return @inbounds  - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) #+ dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁)
+        return @inbounds  - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁)
     end
 end
 
@@ -415,23 +512,47 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
             nRindx = getfield(model_fields, Symbol("n$Rindx"))
             uRindx = find_steady_velocity(Rindx) # find rise velocity of crystal j
             if collision_velocity_parameterisation_num == 2
-                vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
+                if effective_radius
+                    vₜ = (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
+                else
+                    vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
+                end
             else
-                vₜ = sqrt(ϵ/(15ν))*(Rs[indx] + Rs[Rindx]) # spherical approximation
+                if effective_radius
+                    vₜ =  (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν))*(Rs[indx] + Rs[Rindx]) # spherical approximation
+                else
+                    vₜ = sqrt(ϵ/(15ν))*(Rs[indx] + Rs[Rindx]) # spherical approximation
+                end
             end
             vcoll = find_vcoll(uRindx - uᵢ, vₜ)
             if collision_velocity_parameterisation_num == 3
-                Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+                if effective_radius
+                    Fenc .+= (3/(2*aspect_ratio))^(2/3) * 2*π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+                else
+                    Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+                end
             else
-                Fenc .+= π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+                if effective_radius
+                    Fenc .+= (3/(2*aspect_ratio))^(2/3) * π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+                else
+                    Fenc .+= π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+                end
             end
         end    
     else
         Fenc = zeros(1, 1, numz)
         if collision_velocity_parameterisation_num == 2
-            vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[indx]) # cylindrical approximation
+            if effective_radius
+                vₜ = (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[indx]) # cylindrical approximation
+            else
+                vₜ = sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(2*Rs[indx]) # cylindrical approximation
+            end
         else
-            vₜ = sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
+            if effective_radius
+                vₜ = (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
+            else
+                vₜ = sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
+            end
         end
         vcoll = find_vcoll(uᵢ, vₜ)
         nTotal = zeros(1, 1, numz)
@@ -442,9 +563,17 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
         ntot = min.(nTotal, nmax)
 
         if collision_velocity_parameterisation_num == 3
-            Fenc = 2*π*(Rs[indx])^2 * vcoll * ntot
+            if effective_radius
+                Fenc =  (3/(2*aspect_ratio))^(2/3) * 2*π*(Rs[indx])^2 * vcoll * ntot
+            else
+                Fenc = 2*π*(Rs[indx])^2 * vcoll * ntot
+            end
         else
-            Fenc = π*(Rs[indx])^2 * vcoll * ntot
+            if effective_radius
+                Fenc = (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot
+            else
+                Fenc = π*(Rs[indx])^2 * vcoll * ntot
+            end
         end
     end
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
@@ -458,9 +587,9 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
     end
 
     if G₂[i, j, k] > 0 # growth
-        return @inbounds  G₂[i, j, k]*model_fields.n2[i, j, k]/(Vᵢ - V₂) #+ dn_coll[i, j, k] #udn_dz[i, j, k] + G₂[i, j, k]*model_fields.n2[i, j, k]/(V₃ - V₂)
+        return @inbounds  G₂[i, j, k]*model_fields.n9[i, j, k]/(Vᵢ - V₂) + dn_coll[i, j, k] #udn_dz[i, j, k] + G₂[i, j, k]*model_fields.n2[i, j, k]/(V₃ - V₂)
     else # melt
-        return @inbounds  (G₃[i, j, k]*model_fields.n3[i, j, k])/(Vᵢ - V₂) #+ dn_coll[i, j, k] # udn_dz[i, j, k] + (G₃[i, j, k]*model_fields.n3[i, j, k])/(V₃ - V₂)
+        return @inbounds  (G₃[i, j, k]*model_fields.n10[i, j, k])/(Vᵢ - V₂) + dn_coll[i, j, k] # udn_dz[i, j, k] + (G₃[i, j, k]*model_fields.n3[i, j, k])/(V₃ - V₂)
     end
 
     #print("n3", maximum(dn_coll))
@@ -519,7 +648,7 @@ set!(model, u=0, v=0, w=0, T=Tᵢ, n1 = nᵢₙ[1], n2 = nᵢₙ[2], n3 = nᵢ�
 
 simulation = Simulation(model, Δt=1.0, stop_time=72hours)
 
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute)
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute)#0.01minute)
 
 
 function progress(simulation)
