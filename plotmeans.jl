@@ -14,7 +14,7 @@ R₂ = 0.002
 R₃ = 0.003
 
 #end_name = "_Ta_" * string(Tₐ) * "_X_" * string(Fetch) * "_Ua_" * string(Uₐ)
-end_name = "no_vel"
+end_name = "match_Feltham"
 
 
 #time_series = (;
@@ -180,4 +180,4 @@ fig
 
 frames = 1:length(times)
 
-save("no_rise.png", fig)    
+save("no_coll_mixed.png", fig)    

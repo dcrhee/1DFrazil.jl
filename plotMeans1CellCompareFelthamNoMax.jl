@@ -20,10 +20,37 @@ Rs = [0.01, 0.05, 0.15, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 2] .* 1e-3
 volume = 1
 aspect_ratio = 50
 
+feltham_name = "match_Feltham_no_n_max_redistribute"
+
+
 #colours = cmap("Gouldian", N = length(Rs))
 colours = cmap("CBTL1", N = Int(1.2*length(Rs))) 
-#end_name = "match_Feltham_no_collisions"
-end_name = "match_Feltham_nsum"
+end_name = "match_Feltham_no_n_max_eps_0.005"
+new_label = "n sum"
+#new_label = "new_spherical"
+#new_label = "new_cylidrical"
+new_label = "ϵ = 0.005"
+
+feltham_time_series = (;
+     w = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "w"),
+     u = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "u"),
+     v = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "v"),
+     T = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "T"),
+     S = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "S"),
+     n₁ = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n1"),
+     n₂ = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n2"),
+     n₃ = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n3"),
+     n4 = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n4"),
+     n5 = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n5"),
+     n6 = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n6"),
+     n7 = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n7"),
+     n8 = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n8"),
+     n9 = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n9"),
+     n10 = FieldTimeSeries("1D_fields"* feltham_name * ".jld2", "n10"),
+     )
+
+feltham_times = feltham_time_series.w.times
+feltham_times = feltham_times/(3600*24)
 
 time_series = (;
      w = FieldTimeSeries("1D_fields"* end_name * ".jld2", "w"),
@@ -76,8 +103,33 @@ ax_n = Axis(fig[2, 3:4];
               yscale = log10,
               limits = ((tmin, tmax), nothing))
 
-lines!(ax_ΔT, times, find_z_mean(time_series.T) .- find_z_mean(time_series.T[:, :, :, 1]))
-lines!(ax_T, times, find_z_mean(time_series.T) .- Tf)
+lines!(ax_ΔT, feltham_times, find_z_mean(feltham_time_series.T) .- find_z_mean(time_series.T[:, :, :, 1]), linestyle=:dash, color=:black, label = "H&F no max")
+lines!(ax_T, feltham_times, find_z_mean(feltham_time_series.T) .- Tf, linestyle=:dash, color=:black, label = "H&F no max")
+lines!(ax_ΔT, times, find_z_mean(time_series.T) .- find_z_mean(time_series.T[:, :, :, 1]), color=:black, label = new_label)
+lines!(ax_T, times, find_z_mean(time_series.T) .- Tf, color=:black, label = new_label)
+
+lines!(ax_C, feltham_times, find_C_const(1)*find_z_mean(feltham_time_series.n₁), linestyle=:dash,  color = colours[1])
+lines!(ax_C, feltham_times, find_C_const(2)*find_z_mean(feltham_time_series.n₂), linestyle=:dash,  color = colours[2])
+lines!(ax_C, feltham_times, find_C_const(3)*find_z_mean(feltham_time_series.n₃), linestyle=:dash,  color = colours[3])
+lines!(ax_C, feltham_times, find_C_const(4)*find_z_mean(feltham_time_series.n4), linestyle=:dash,  color = colours[4])
+lines!(ax_C, feltham_times, find_C_const(5)*find_z_mean(feltham_time_series.n5), linestyle=:dash,  color = colours[5])
+lines!(ax_C, feltham_times, find_C_const(6)*find_z_mean(feltham_time_series.n6), linestyle=:dash,  color = colours[6])
+lines!(ax_C, feltham_times, find_C_const(7)*find_z_mean(feltham_time_series.n7), linestyle=:dash,  color = colours[7])
+lines!(ax_C, feltham_times, find_C_const(8)*find_z_mean(feltham_time_series.n8), linestyle=:dash,  color = colours[8])
+lines!(ax_C, feltham_times, find_C_const(9)*find_z_mean(feltham_time_series.n9), linestyle=:dash,  color = colours[9])
+lines!(ax_C, feltham_times, find_C_const(10)*find_z_mean(feltham_time_series.n10), linestyle=:dash, color = colours[10])
+
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n₁), linestyle=:dash, color = colours[1])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n₂), linestyle=:dash,  color = colours[2])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n₃), linestyle=:dash,  color = colours[3])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n4), linestyle=:dash,  color = colours[4])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n5), linestyle=:dash,  color = colours[5])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n6), linestyle=:dash,  color = colours[6])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n7), linestyle=:dash,  color = colours[7])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n8), linestyle=:dash,  color = colours[8])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n9), linestyle=:dash,  color = colours[9])
+lines!(ax_n, feltham_times, find_z_mean(feltham_time_series.n10), linestyle=:dash,  color = colours[10])
+
 lines!(ax_C, times, find_C_const(1)*find_z_mean(time_series.n₁), label = "C₁", color = colours[1])
 lines!(ax_C, times, find_C_const(2)*find_z_mean(time_series.n₂), label = "C₂", color = colours[2])
 lines!(ax_C, times, find_C_const(3)*find_z_mean(time_series.n₃), label = "C₃", color = colours[3])
@@ -103,12 +155,12 @@ lines!(ax_n, times, find_z_mean(time_series.n10), label = "n₁₀", color = col
 
 axislegend(ax_C)
 axislegend(ax_n)
-#axislegend(ax_ΔT)
+axislegend(ax_ΔT)
 #axislegend(ax_T)
 
 fig
 
 frames = 1:length(times)
 
-save(end_name * ".png", fig)
+save(end_name * "_compare_nomax.png", fig)
 #save("match_Feltham_no_collisions.png", fig) 
