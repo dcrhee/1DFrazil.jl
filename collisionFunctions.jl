@@ -15,6 +15,7 @@ depth = 0.20
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
+numSizeClasses = 100
 
 # run with the higher values of epsilon and see if it makes a difference using the different formulations
 
@@ -23,7 +24,10 @@ volume = 1
 # choose radius intervals
 aspect_ratio = 50
 
-Rs = [0.01, 0.05, 0.15, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 2] .* 1e-3
+#
+Rs = range(0.01, 2, numSizeClasses) .* 1e-3
+
+#Rs = [0.01, 0.05, 0.15, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 2] .* 1e-3
 Hs = 2*Rs/aspect_ratio
 Vs = π * Rs.^2 .* Hs
 
@@ -492,43 +496,52 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #end
 end
 
+################################ define forcing functions ###########################################
 
+# Define the range of tracers (e.g., n2 to n100)
+n_range_forcing = 2:numSizeClasses-1
+n_range_tracers = 2:numSizeClasses
+# Create the forcing dictionary dynamically
+forcing_dict = Dict(Symbol("n$n") => Forcing(nintermediate_forcing_func, discrete_form=true, parameters=n) for n in n_range_forcing)
 n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = 1)
-n2_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 2)
-n3_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 3)
-n4_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 4)
-n5_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 5)
-n6_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 6)
-n7_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 7)
-n8_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 8)
-n9_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 9)
-n10_forcing = Forcing(nend_forcing_func, discrete_form=true, parameters = 10)
+nend_forcing = Forcing(nend_forcing_func, discrete_form=true, parameters = numSizeClasses)
 #T_forcing = Forcing(T_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3, :n4, :n5, :n6, :n7, :n8, :n9, :n10))
 #S_forcing = Forcing(S_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3))
 
+# Merge `n1_forcing` with the dynamic forcing dictionary and convert to NamedTuple
+forcing_combined = (; Dict(:n1 => n1_forcing)..., forcing_dict..., Dict(:n10 => nend_forcing)...)
+
+######################### setup model ########################################
+
+# Define the model with dynamically generated tracers and forcing
 model = NonhydrostaticModel(; grid,
-advection = Centered(), #WENO(),
-timestepper = :RungeKutta3,
-buoyancy = SeawaterBuoyancy(),
-#closure = SmagorinskyLilly(Pr = 1, Cb = 1 / 1),
-tracers = (:T, :S, :n1, :n2, :n3, :n4, :n5, :n6, :n7, :n8, :n9, :n10),
-#buoyancy = SeawaterBuoyancy(),
-forcing=(n1=n1_forcing, n2=n2_forcing, n3=n3_forcing, n4=n4_forcing, n5=n5_forcing, n6=n6_forcing, n7=n7_forcing, n8=n8_forcing, n9=n9_forcing, n10=n10_forcing)) #,
-#boundary_conditions = (T=T_boundary_conditions, S=S_boundary_conditions, n1 = n1_boundary_conditions))
+    advection = Centered(), # WENO(),
+    timestepper = :RungeKutta3,
+    buoyancy = SeawaterBuoyancy(),
+    tracers = (:T, :S, :n1, Symbol.(["n$n" for n in n_range_tracers])...),  # Dynamically create the list
+    forcing = forcing_combined  # Merge manually defined n1 with the dictionary
+)
 
 u, v, w = model.velocities
 #nᵢₙ = Cᵢₙ * aspect_ratio * volume / (2 * π * length(Rs)) * 1 ./ Rs.^3
 nᵢₙ = 6429774.231059961/length(Rs) * ones(length(Rs))
 
+# Create a dictionary for dynamically setting `n` values
+ninitial_dict = Dict(Symbol("n$n") => nᵢₙ[n] for n in 1:numSizeClasses)
+ninitial = (; ninitial_dict...)
+
 # set the initial conditions
 Tᵢ = Tf - 1e-4 #* Ξₜ(z)
-set!(model, u=0, v=0, w=0, T=Tᵢ, n1 = nᵢₙ[1], n2 = nᵢₙ[2], n3 = nᵢₙ[3], n4 = nᵢₙ[4], n5 = nᵢₙ[5], n6 = nᵢₙ[6], n7 = nᵢₙ[7], n8 = nᵢₙ[8], n9 = nᵢₙ[9], n10 = nᵢₙ[10], S=34.5)
+#set!(model, u=0, v=0, w=0, T=Tᵢ, n1 = nᵢₙ[1], n2 = nᵢₙ[2], n3 = nᵢₙ[3], n4 = nᵢₙ[4], n5 = nᵢₙ[5], n6 = nᵢₙ[6], n7 = nᵢₙ[7], n8 = nᵢₙ[8], n9 = nᵢₙ[9], n10 = nᵢₙ[10], S=34.5)
+# Set initial conditions using `set!`
+set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 
-#simulation = Simulation(model, Δt=1.0, stop_time=1hours)
+########################## run model #######################################
+
 simulation = Simulation(model, Δt=1.0, stop_time=1hours)
 
 # Define the enforce_nonnegative_tracer function
-function enforce_nonnegative_tracer(simulation)
+function enforce_nonnegative_tracer_old(simulation)
     n1_data = simulation.model.tracers.n1.data
     @inbounds n1_data .= max.(n1_data, 0)
 
@@ -562,6 +575,14 @@ function enforce_nonnegative_tracer(simulation)
     return nothing
 end
 
+function enforce_nonnegative_tracer(simulation)
+    for n in 1:numSizeClasses
+        tracer_data = getproperty(simulation.model.tracers, Symbol("n$n")).data
+        @inbounds tracer_data .= max.(tracer_data, 0)
+    end
+    return nothing
+end
+
 # Create the simulation
 grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 
@@ -586,16 +607,17 @@ simulation.output_writers[:fields] =
 u, v, w = model.velocities
 T = model.tracers.T
 S = model.tracers.S
-n1 = model.tracers.n1
-n2 = model.tracers.n2
-n3 = model.tracers.n3
-n4 = model.tracers.n4
-n5 = model.tracers.n5
-n6 = model.tracers.n6
-n7 = model.tracers.n7
-n8 = model.tracers.n8
-n9 = model.tracers.n9
-n10 = model.tracers.n10
+
+#n1 = model.tracers.n1
+#n2 = model.tracers.n2
+#n3 = model.tracers.n3
+#n4 = model.tracers.n4
+#n5 = model.tracers.n5
+#n6 = model.tracers.n6
+#n7 = model.tracers.n7
+#n8 = model.tracers.n8
+#n9 = model.tracers.n9
+#n10 = model.tracers.n10
 
 run!(simulation)
 #end
