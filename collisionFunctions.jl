@@ -15,7 +15,7 @@ depth = 0.20
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
-numSizeClasses = 100
+numSizeClasses = 50
 
 # run with the higher values of epsilon and see if it makes a difference using the different formulations
 
@@ -146,7 +146,7 @@ pnum = 2
 
 #for cvelnum = [2, 3] #[1, 2, 3]
 #for pnum = [1, 2]
-end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ)
+end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
@@ -509,7 +509,7 @@ nend_forcing = Forcing(nend_forcing_func, discrete_form=true, parameters = numSi
 #S_forcing = Forcing(S_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3))
 
 # Merge `n1_forcing` with the dynamic forcing dictionary and convert to NamedTuple
-forcing_combined = (; Dict(:n1 => n1_forcing)..., forcing_dict..., Dict(:n10 => nend_forcing)...)
+forcing_combined = (; Dict(:n1 => n1_forcing)..., forcing_dict..., Dict(Symbol("n$numSizeClasses") => nend_forcing)...)
 
 ######################### setup model ########################################
 
@@ -590,11 +590,11 @@ grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 #add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(20))
 
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute)#0.01minute)
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute)#0.01minute)
 
 #simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
-output_interval = 1minutes
+output_interval = 0.1minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 
@@ -607,17 +607,6 @@ simulation.output_writers[:fields] =
 u, v, w = model.velocities
 T = model.tracers.T
 S = model.tracers.S
-
-#n1 = model.tracers.n1
-#n2 = model.tracers.n2
-#n3 = model.tracers.n3
-#n4 = model.tracers.n4
-#n5 = model.tracers.n5
-#n6 = model.tracers.n6
-#n7 = model.tracers.n7
-#n8 = model.tracers.n8
-#n9 = model.tracers.n9
-#n10 = model.tracers.n10
 
 run!(simulation)
 #end
