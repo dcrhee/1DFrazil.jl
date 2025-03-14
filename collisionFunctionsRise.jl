@@ -8,6 +8,7 @@ using Oceananigans.AbstractOperations: ∂z
 using Printf
 using Statistics
 using Oceananigans.AbstractOperations
+include("Constants.jl")
 using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ, grav # these constants can be called inside any function
 
 # setup grid: choose 128 data points

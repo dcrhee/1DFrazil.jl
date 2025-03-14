@@ -260,11 +260,11 @@ plottimes = [5.4, 5.9, 6.5, 10.0]
 for (i, n1val) in enumerate(exp10.(range(start=log10(n1max/10), stop=log10(n1max/1.001), length=numpdflines)))
     tindx = argmin(abs.(find_z_mean(time_series.n1) .- n1val))
     tindx = argmin(abs.(plottimes[i] .- feltham_times))
-    #try
+    try
         pdf, barvals = generatePDF(tindx, feltham_time_series)
         lines!(ax_r, pdf.x*1000, pdf.density, linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
-    #catch
-    #end
+    catch
+    end
     pdf, barvals = generatePDF(tindx, time_series)
     lines!(ax_r, pdf.x*1000, pdf.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = "t = " * string(feltham_times[tindx]) * "minutes")
 end
