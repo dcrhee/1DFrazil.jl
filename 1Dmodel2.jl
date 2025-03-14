@@ -11,8 +11,9 @@ using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ # th
 
 # setup grid: choose 128 data points
 depth = 0.20
-numz = 128
+numz = 3 #128
 grid = RectilinearGrid(size=numz, z=(-depth, 0), topology=(Flat, Flat, Bounded))
+volume = 1e7
 
 # constants/parameters
 
@@ -112,7 +113,7 @@ end
 
 function find_steady_velocity(Rᵢ)
     uᵢ = 30*Rᵢ^(1.2)
-    return uᵢ
+    return 0 #uᵢ
 end
 
 function find_growth_rate(T, Rᵢ, H)
@@ -167,7 +168,7 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
 
     # Extend velocity array (avoid index errors)
     uᵢ = find_steady_velocity(Rs[indx])
-    udn_dz = -uᵢ /depth #use the faces below
+    udn_dz = -nᵢ .* uᵢ /depth #use the faces below
 
     # Access nᵢ₋₁ and nᵢ₊₁ safely
     n_im1 = getfield(model_fields, Symbol("n$(indx-1)"))  # Field nᵢ₋₁
@@ -211,12 +212,12 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
                 vₜ = sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
             end
             vcoll = find_vcoll(uᵢ, vₜ)
-            nTotal = 0
+            nTotal = zeros(1, 1, numz)
             for Rindx in eachindex(Rs)
                 nRindx = getfield(model_fields, Symbol("n$Rindx"))
-                nTotal += sum(nRindx)
+                nTotal .+= nRindx
             end
-            ntot = min(nTotal, nmax)
+            ntot = min.(nTotal, nmax)
 
             if collision_velocity_parameterisation_num == 3
                 Fenc = 2*π*(Rs[indx])^2 * vcoll * ntot
@@ -263,12 +264,12 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
                     vₜ = sqrt(ϵ/(15ν))*(2*Rs[β]) # spherical approximation
                 end
                 vcoll = find_vcoll(uᵦ, vₜ)
-                nTotal = 0
+                nTotal = zeros(1, 1, numz)
                 for Rindx in eachindex(Rs)
                     nRindx = getfield(model_fields, Symbol("n$Rindx"))
-                    nTotal += sum(nRindx)
+                    nTotal .+= nRindx
                 end
-                ntot = min(nTotal, nmax)
+                ntot = min.(nTotal, nmax)
 
                 if collision_velocity_parameterisation_num == 3
                     Fencᵦ = 2*π*(Rs[β])^2 * vcoll * ntot
@@ -284,22 +285,24 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
 
     # crystal size redistribution
     if crystal_size_collision_redistribution == 1
-        dn_coll = - V₁/Vᵢ * Fcoll
+        dn_coll = - V₁/Vᵢ * Fcoll/volume
     else
-        dn_coll = αVolconst[indx] * Fcoll .+ βVolconst[indx] * Fcollᵦ
+        dn_coll = (αVolconst[indx] * Fcoll .+ βVolconst[indx] * Fcollᵦ)//volume
     end
+    #print("n2", maximum(dn_coll))
 
     # Apply logic for growth and melting
     if G_im1[i, j, k] > 0  # Growth case
-        return @inbounds udn_dz - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) #+ dn_coll[i, j, k] #udn_dz[i, j, k] - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
+        return @inbounds udn_dz[i, j, k] - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] #udn_dz[i, j, k] - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
     else  # Melt case
-        return @inbounds udn_dz - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) #+ dn_coll[i, j, k] #udn_dz[i, j, k] - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
+        return @inbounds udn_dz[i, j, k] - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] #udn_dz[i, j, k] - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) - ζᵢ * nᵢ * Fcoll
     end
 end
 
 function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     uᵢ = find_steady_velocity(Rs[indx])
-    udn_dz = -uᵢ /depth #use the faces below
+    nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
+    udn_dz = -nᵢ .* uᵢ /depth #use the faces below
 
     # growth term
     G₁ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
@@ -343,12 +346,12 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
                 vₜ = sqrt(ϵ/(15ν))*(2*Rs[jindx]) # spherical approximation
             end
             vcoll = find_vcoll(uⱼ, vₜ)
-            nTotal = 0
+            nTotal = zeros(1, 1, numz)
             for Rindx in eachindex(Rs)
                 nRindx = getfield(model_fields, Symbol("n$Rindx"))
-                nTotal += sum(nRindx)
+                nTotal .+= nRindx
             end
-            ntot = min(nTotal, nmax)
+            ntot = min.(nTotal, nmax)
 
             if collision_velocity_parameterisation_num == 3
                 Fenc = 2*π*(Rs[jindx])^2 * vcoll * ntot
@@ -361,15 +364,16 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
 
     
     if crystal_size_collision_redistribution == 1
-        dn_coll = Fcollsum
+        dn_coll = Fcollsum / volume
     else
-        dn_coll = ζ * Fcollsum
+        dn_coll = ζ * Fcollsum / volume
     end
+    #print("n1", maximum(dn_coll))
 
     if G₁[i, j, k] > 0 # growth
-        return @inbounds udn_dz - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) #+ dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁)
+        return @inbounds udn_dz[i, j, k] - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) + dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁)
     else # melt
-        return @inbounds udn_dz - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) #+ dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁)
+        return @inbounds udn_dz[i, j, k] - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k] #@inbounds udn_dz[i, j, k] - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁)
     end
 end
 
@@ -378,7 +382,8 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
 
     ρ = find_density(model_fields.T, model_fields.S)
     uᵢ = find_steady_velocity(Rs[indx])
-    udn_dz = -uᵢ /depth #use the faces below
+    nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
+    udn_dz = -nᵢ .* uᵢ /depth #use the faces below
 
     # growth term
     G₂ = find_growth_rate(model_fields.T, Rs[indx-1], Hs[indx-1])
@@ -399,9 +404,9 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
             end
             vcoll = find_vcoll(uRindx - uᵢ, vₜ)
             if collision_velocity_parameterisation_num == 3
-                Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                Fenc .+= 2*π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
             else
-                Fenc .+= π*(Rs[indx] + Rs[Rindx])^2*nRindx * vcoll
+                Fenc .+= π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
             end
         end    
     else
@@ -412,12 +417,12 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
             vₜ = sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
         end
         vcoll = find_vcoll(uᵢ, vₜ)
-        nTotal = 0
+        nTotal = zeros(1, 1, numz)
         for Rindx in eachindex(Rs)
             nRindx = getfield(model_fields, Symbol("n$Rindx"))
-            nTotal += sum(nRindx)
+            nTotal .+= nRindx
         end
-        ntot = min(nTotal, nmax)
+        ntot = min.(nTotal, nmax)
 
         if collision_velocity_parameterisation_num == 3
             Fenc = 2*π*(Rs[indx])^2 * vcoll * ntot
@@ -430,16 +435,18 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
 
     # crystal size redistribution
     if crystal_size_collision_redistribution == 1
-        dn_coll = - V₁/Vᵢ * Fcoll
+        dn_coll = - V₁/Vᵢ * Fcoll /volume
     else
-        dn_coll = αVolconst[indx] * Fcoll
+        dn_coll = αVolconst[indx] * Fcoll /volume
     end
 
     if G₂[i, j, k] > 0 # growth
-        return @inbounds udn_dz .+ G₂[i, j, k]*model_fields.n2[i, j, k]/(Vᵢ - V₂) #.+ dn_coll[i, j, k] #udn_dz[i, j, k] + G₂[i, j, k]*model_fields.n2[i, j, k]/(V₃ - V₂)
+        return @inbounds udn_dz[i, j, k] .+ G₂[i, j, k]*model_fields.n2[i, j, k]/(Vᵢ - V₂) + dn_coll[i, j, k] #udn_dz[i, j, k] + G₂[i, j, k]*model_fields.n2[i, j, k]/(V₃ - V₂)
     else # melt
-        return @inbounds udn_dz .+ (G₃[i, j, k]*model_fields.n3[i, j, k])/(Vᵢ - V₂) #.+ dn_coll[i, j, k] # udn_dz[i, j, k] + (G₃[i, j, k]*model_fields.n3[i, j, k])/(V₃ - V₂)
+        return @inbounds udn_dz[i, j, k] .+ (G₃[i, j, k]*model_fields.n3[i, j, k])/(Vᵢ - V₂) + dn_coll[i, j, k] # udn_dz[i, j, k] + (G₃[i, j, k]*model_fields.n3[i, j, k])/(V₃ - V₂)
     end
+
+    #print("n3", maximum(dn_coll))
 end
 
 function T_forcing_func(z, t, T, S, n₁, n₂, n₃)
@@ -449,7 +456,7 @@ function T_forcing_func(z, t, T, S, n₁, n₂, n₃)
     return Tconst₁ * n₁ + Tconst₂ * n₂ + Tconst₃ * n₃
 end
 
-function S_forcing_func(z, t, T, S, n1, n2, n3, p)
+function S_forcing_func(z, t, T, S, n1, n2, n3)
     Sconst₁ = salinity_forcing_constant(T, S, 1)
     Sconst₂ = salinity_forcing_constant(T, S, 2)
     Sconst₃ = salinity_forcing_constant(T, S, 3)
@@ -460,7 +467,7 @@ n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = 1)
 n2_forcing = Forcing(nintermediate_forcing_func, discrete_form=true, parameters = 2)
 n3_forcing = Forcing(nend_forcing_func, discrete_form=true, parameters = 3)
 T_forcing = Forcing(T_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3))
-S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = Rs[1], R₂ = Rs[2], R₃ = Rs[3], H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n1, :n2, :n3))
+S_forcing = Forcing(S_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3))
 
 model = NonhydrostaticModel(; grid, coriolis,
 advection = WENO(),
@@ -476,7 +483,7 @@ boundary_conditions = (T=T_boundary_conditions, S=S_boundary_conditions, n1 = n1
 
 u, v, w = model.velocities
 width = depth/10
-nᵢ(z) = 1e6*exp(-(z+depth/2)^2 / (2width^2))
+nᵢ(z) = 1e6#*exp(-(z+depth/2)^2 / (2width^2))
 
 # set the initial conditions
 Tᵢ(z) = Tf - 0.01 #* Ξₜ(z)

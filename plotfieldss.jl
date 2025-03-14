@@ -11,6 +11,8 @@ Tₐ = -20 # atmosphere temperature
 end_name = "_Ta_" * string(Tₐ) * "_X_" * string(Fetch) * "_Ua_" * string(Uₐ)
 end_name = "no_vel"
 
+end_name = "match_Feltham_just_rise"
+
 #time_series = (;
 #     w = FieldTimeSeries("1D_fields"* end_name * ".jld2", "w"),
 #     u = FieldTimeSeries("1D_fields"* end_name * ".jld2", "u"),
@@ -106,6 +108,6 @@ fig
 
 frames = 1:length(times)
 
-record(fig, "novel.mp4", frames, framerate=8) do i
+record(fig, "rise.mp4", frames, framerate=8) do i
     n[] = i
 end

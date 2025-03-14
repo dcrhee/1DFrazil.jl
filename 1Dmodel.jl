@@ -1,13 +1,15 @@
 using Oceananigans
 using CairoMakie
 using Oceananigans.Units: minute, minutes, hours
-using Oceananigans.BuoyancyModels: g_Earth
+using Oceananigans.Operators
+#using Oceananigans.BuoyancyModels: g_Earth
 
 using Oceananigans.AbstractOperations: ∂z
 using Printf
 using Statistics
 using Oceananigans.AbstractOperations
-using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ # these constants can be called inside any function
+using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ, grav # these constants can be called inside any function
+using Oceananigans.Fields: interpolate!
 
 # need to make sure of alpha S and alpha T, check the constants and then use these constants in the functions as they are defined outside the programme
 # try and retrive buoyancy from SeawaterBuoyancy
@@ -28,14 +30,14 @@ Tₐ = -20 # atmosphere temperature
 
 end_name = "_Ta_" * string(Tₐ) * "_X_" * string(Fetch) * "_Ua_" * string(Uₐ)
 
-Hₛ = 0.256*Uₐ^2/g_Earth*(1 - (1 + 0.006*(g_Earth*Fetch/Uₐ^2)^(1/2))^(-2))
-ω = 2π/24.935*g_Earth/Uₐ*(1.6*Uₐ^2/(g_Earth*Hₛ))^0.625
+Hₛ = 0.256*Uₐ^2/grav*(1 - (1 + 0.006*(grav*Fetch/Uₐ^2)^(1/2))^(-2))
+ω = 2π/24.935*grav/Uₐ*(1.6*Uₐ^2/(grav*Hₛ))^0.625
 
 # specify the waves
-wavenumber = ω^2/g_Earth
+wavenumber = ω^2/grav
 amplitude = Hₛ/2 # m
 wavelength = 2π / wavenumber  # m
-frequency = sqrt(g_Earth * wavenumber) # s⁻¹
+frequency = sqrt(grav * wavenumber) # s⁻¹
 
 # The vertical scale over which the Stokes drift of a monochromatic surface wave
 # decays away from the surface is `1/2wavenumber`, or
@@ -50,6 +52,9 @@ uˢ(z) = Uˢ * exp(z / vertical_scale)
 Qᵘ = -ρₐ/ρₒ*Cd*Uₐ^2 # m² s⁻², surface kinematic momentum flux (in time with https://www.cambridge.org/core/journals/journal-of-fluid-mechanics/article/langmuir-turbulence-in-the-ocean/638FD0E368140E5972144348DB930A38)
 u_boundary_conditions = FieldBoundaryConditions(top = FluxBoundaryCondition(Qᵘ))
 n₁_boundary_conditions = FieldBoundaryConditions(top = GradientBoundaryCondition(0))
+
+n_bcs = FieldBoundaryConditions(bottom=FluxBoundaryCondition(0), 
+                                top=FluxBoundaryCondition(0))
 
 Qʰ = 40.0*(Tf - Tₐ)  # W m⁻², surface _heat_ flux
 Qᵀ = Qʰ / (ρₒ * cᴾ) # K m s⁻¹, surface _temperature_ flux
@@ -73,8 +78,14 @@ function find_Vi(R, H = 0.0004)
     return π*R^2*H
 end
 
-function find_density(T, S, ρ₀ = 1027.0, β = 0.0078, α = 1.67*10^(-4))
-    ρ = ρ₀ * (1.0256550500000001 - α*T + β*S)
+function find_density(T, S)
+    ρ = ρₒ * (1 + 7.86 * 1e-4 * (S - 34.5) - 3.87 * 1e-5 * (T + 2) )
+    return ρ
+end
+
+function find_density(T, S, ρ₀ = 1027.0, β = 0.0078, αᵨ = 1.67*10^(-4))
+    ρ = ρ₀ * (1.0256550500000001 - αᵨ*T + β*S)
+    #print(", T: ", maximum(T), "S: ", minimum(S), "ρ: ", minimum(ρ))
     return ρ
 end
 
@@ -82,7 +93,7 @@ function find_steady_velocity(T, S, Rᵢ, Hᵢ = 0.0004)
     ρ =  find_density(T, S)
     Sᵢ = π*Rᵢ^2
     Vᵢ = find_Vi(Rᵢ, Hᵢ)
-    uᵢ = sqrt.( (2*g_Earth*Vᵢ) / (Cd*Sᵢ) * (1 - ρᵢ/ρ))
+    uᵢ = sqrt.( (2*grav*Vᵢ) / (Cd*Sᵢ) * (1 - ρᵢ/ρ))
     return uᵢ
 end
 
@@ -109,9 +120,21 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, Rᵢ)
 
     ρ = find_density(model_fields.T, model_fields.S)
     uᵢ = find_steady_velocity(model_fields.T, model_fields.S, Rᵢ)
+    uᵢ_faces = Field{Face, Face, Face}(grid)  # Create a field on cell faces
+    uᵢ = Field{Center, Center, Center}(grid)
+    interpolate!(uᵢ_faces, uᵢ)              # Interpolate uᵢ to cell faces
+    #println("Size of ui: ", size(uᵢ))
+    #println("Size of uᵢ_faces: ", size(uᵢ_faces))
+    #println("Size of T: ", size(model_fields.T))  # (10, 20)
+
     dn_dz = ∂z(model_fields.n₁)
-    uᵢ = cat(uᵢ[1, 1, 1],  uᵢ, dims = 3)
-    udn_dz = -uᵢ .* dn_dz #use the faces below
+    #println("Size of dn_dz: ", size(dn_dz)) 
+    #println("n1", model_fields.n₁[1, 1, 2])
+    
+
+    #uᵢ = cat(uᵢ[1, 1, 1],  uᵢ, dims = 3)
+    udn_dz = -uᵢ_faces .* dn_dz # use the faces below - will calculate the flux at the faces
+
 
     # growth term
     G₁ = find_growth_rate(model_fields.T, Rᵢ)
@@ -129,9 +152,13 @@ function n2_forcing_func(i, j, k, grid, clock, model_fields, Rᵢ)
 
     ρ = find_density(model_fields.T, model_fields.S)
     uᵢ = find_steady_velocity(model_fields.T, model_fields.S, Rᵢ)
+    uᵢ_faces = Field{Face, Face, Face}(grid)  # Create a field on cell faces
+    uᵢ = Field{Center, Center, Center}(grid)
+    interpolate!(uᵢ_faces, uᵢ)  
+
     dn_dz = ∂z(model_fields.n₁)
-    uᵢ = cat(uᵢ[1, 1, 1],  uᵢ, dims = 3)
-    udn_dz = -uᵢ .* dn_dz #use the faces below
+    #uᵢ = cat(uᵢ[1, 1, 1],  uᵢ, dims = 3)
+    udn_dz = -uᵢ_faces .* dn_dz #use the faces below
 
     # growth term
     G₁ = find_growth_rate(model_fields.T, Rᵢ)
@@ -151,10 +178,13 @@ function n3_forcing_func(i, j, k, grid, clock, model_fields, Rᵢ)
 
     ρ = find_density(model_fields.T, model_fields.S)
     uᵢ = find_steady_velocity(model_fields.T, model_fields.S, Rᵢ)
-    dn_dz = ∂z(model_fields.n₁)
-    uᵢ = cat(uᵢ[1, 1, 1],  uᵢ, dims = 3)
-    udn_dz = -uᵢ .* dn_dz #use the faces below
 
+    dn_dz = ∂z(model_fields.n₁)
+    #uᵢ = cat(uᵢ[1, 1, 1],  uᵢ, dims = 3)
+    uᵢ_faces = Field{Face, Face, Face}(grid)  # Create a field on cell faces
+    uᵢ = Field{Center, Center, Center}(grid)
+    interpolate!(uᵢ_faces, uᵢ)  
+    udn_dz = -uᵢ_faces .* dn_dz #use the faces below
     # growth term
     G₂ = find_growth_rate(model_fields.T, R₂)
     G₃ = find_growth_rate(model_fields.T, R₃)
@@ -228,9 +258,9 @@ function S_forcing_func(z, t, T, S, n₁, n₂, n₃, p)
 end
 
 
-n1_forcing = Forcing(n1_forcing_func_no_rise, discrete_form=true, parameters = R₁)
-n2_forcing = Forcing(n2_forcing_func_no_rise, discrete_form=true, parameters = R₂)
-n3_forcing = Forcing(n3_forcing_func_no_rise, discrete_form=true, parameters = R₃)
+n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = R₁)
+n2_forcing = Forcing(n2_forcing_func, discrete_form=true, parameters = R₂)
+n3_forcing = Forcing(n3_forcing_func, discrete_form=true, parameters = R₃)
 T_forcing = Forcing(T_forcing_func, parameters=(cᴾ = cᴾ, k = kl, Nu = Nu, ρ=ρₒ, R₁ = R₁, R₂ = R₂, R₃ = R₃, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁, :n₂, :n₃))
 S_forcing = Forcing(S_forcing_func, parameters=(cᴾ = cᴾ, α = α, k = kl, Nu = Nu, ρ=ρₒ, ρᵢ=ρᵢ, R₁ = R₁, R₂ = R₂, R₃ = R₃, H = 0.0004, Tf = Tf), field_dependencies=(:T, :S, :n₁, :n₂, :n₃))
 
@@ -242,7 +272,7 @@ buoyancy = SeawaterBuoyancy(),
 closure = SmagorinskyLilly(Pr = 1, Cb = 1 / 1),
 forcing=(n₁=n1_forcing, n₂=n2_forcing, n₃=n3_forcing, S=S_forcing, T=T_forcing),
 stokes_drift = UniformStokesDrift(∂z_uˢ=∂z_uˢ),
-boundary_conditions = (T=T_boundary_conditions, S=S_boundary_conditions, n₁ = n₁_boundary_conditions))
+boundary_conditions = (T=T_boundary_conditions, S=S_boundary_conditions, n₁ = n_bcs, n₂ = n_bcs, n₃ = n_bcs))
 
 
 u, v, w = model.velocities
@@ -267,12 +297,32 @@ nᵢ(z) = 1e10*exp(-(z+10)^2 / (2width^2))
 
 set!(model, w=wᵢ, T=Tᵢ, n₁ = nᵢ, n₂ = nᵢ, n₃ = nᵢ, S=35)
 
-simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
+simulation = Simulation(model, Δt=1.0, stop_time=0.1hours)
 
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute)
 
 
 function progress(simulation)
+    u, v, w = simulation.model.velocities
+    T = simulation.model.tracers.T
+    n1 = simulation.model.tracers.n₁
+    n2 = simulation.model.tracers.n₂
+    n3 = simulation.model.tracers.n₃
+    
+    # Print a progress message
+    #msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, wall time: %s\n",
+    msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, n1 = %.1e, n2 = %.1e, n3 = %.1e, Tmin = %.5f, Tmax = %.5f, wall time: %s\n",
+    iteration(simulation),
+    prettytime(time(simulation)),
+    prettytime(simulation.Δt),
+    maximum(abs, u), maximum(abs, v), maximum(abs, w),
+    minimum(n1), minimum(n2), minimum(n3),
+    #maximum(n1), maximum(n2), maximum(n3),
+    minimum(T), maximum(T),
+    prettytime(simulation.run_wall_time))
+
+    @info msg
+
     u, v, w = simulation.model.velocities
 
     # Print a progress message
@@ -288,7 +338,7 @@ function progress(simulation)
     return nothing
 end
 
-simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
+simulation.callbacks[:progress] = Callback(progress, IterationInterval(1))
 
 output_interval = 0.1minutes
 

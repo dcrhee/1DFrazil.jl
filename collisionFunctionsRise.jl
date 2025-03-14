@@ -11,7 +11,7 @@ using Oceananigans.AbstractOperations
 using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ, grav # these constants can be called inside any function
 
 # setup grid: choose 128 data points
-depth = 0.20
+depth = 1
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
@@ -146,7 +146,7 @@ pnum = 1
 
 #for cvelnum = [2, 3] #[1, 2, 3]
 #for pnum = [1, 2]
-end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
+end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_depth_" * string(depth)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
@@ -365,9 +365,10 @@ end
 
 function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
     Vᵢ = find_Vi(Rs[indx], Hs[indx])
-    #uᵢ = find_steady_velocity(indx)
+    uᵢ = find_steady_velocity(indx)
     # Compute derivative for nᵢ
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
+    udn_dz = -nᵢ .* uᵢ /depth #use the faces below
     Fenc = coll_freq_concentration_parameterisation(model_fields, indx)
     
     Fcoll = Fenc .* nᵢ
@@ -387,20 +388,20 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
         #final_conc = (G₃[i, j, k]*model_fields.n10[i, j, k])/(Vᵢ - V₂) + dn_coll[i, j, k] + udn_dz[i, j, k]
         #return @inbounds  final_conc
     #end
-    return dn_coll[i, j, k]
+    return dn_coll[i, j, k] + udn_dz[i, j, k]
 
 end
 
 function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #ρ = find_density(model_fields.T, model_fields.S)
-    #uᵢ = find_steady_velocity(indx)
+    uᵢ = find_steady_velocity(indx)
 
     # Compute derivative for nᵢ
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
-    #nᵢ = max.(nᵢ, 0)
+    nᵢ = max.(nᵢ, 0)
 
     # Extend velocity array (avoid index errors)
-    #udn_dz = -nᵢ .* uᵢ /depth #use the faces below
+    udn_dz = -nᵢ .* uᵢ /depth #use the faces below
 
     # Access nᵢ₋₁ and nᵢ₊₁ safely
     #n_im1 = getfield(model_fields, Symbol("n$(indx-1)"))  # Field nᵢ₋₁
@@ -453,15 +454,15 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #    final_conc = - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] + udn_dz[i, j, k]
     #    return @inbounds final_conc
     #end
-    return @inbounds dn_coll[i, j, k]
+    return @inbounds dn_coll[i, j, k] + udn_dz[i, j, k]
 end
 
 
 function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     uᵢ = find_steady_velocity(indx)
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
-    #nᵢ = max.(nᵢ, 0)
-    #udn_dz = -nᵢ .* uᵢ /depth #use the faces below
+    nᵢ = max.(nᵢ, 0)
+    udn_dz = -nᵢ .* uᵢ /depth #use the faces below
 
     # growth term
     #G₁ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
@@ -492,7 +493,7 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #else # melt
     #    final_conc = - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k] + udn_dz[i, j, k]
         
-    return @inbounds  dn_coll[i, j, k]
+    return @inbounds  dn_coll[i, j, k] + udn_dz[i, j, k]
     #end
 end
 
@@ -538,7 +539,7 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 
 ########################## run model #######################################
 
-simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
+simulation = Simulation(model, Δt=1.0, stop_time=3hours)
 
 # Define the enforce_nonnegative_tracer function
 function enforce_nonnegative_tracer_old(simulation)
@@ -587,12 +588,10 @@ end
 grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 
 # Add the callback to enforce non-negativity
-#add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
+add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(20))
 
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute)#0.01minute)
-
-#simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
 output_interval = 0.1minutes
 
@@ -610,4 +609,4 @@ S = model.tracers.S
 
 run!(simulation)
 #end
-#end
+#endh
