@@ -2,18 +2,24 @@ using Oceananigans
 using CairoMakie
 using Oceananigans.Units: minute, minutes, hours
 using SpecialFunctions
+using Interpolations: LinearInterpolation
 #using Oceananigans.BuoyancyModels: g_Earth
 
 using Oceananigans.AbstractOperations: ∂z
 using Printf
 using Statistics
 using Oceananigans.AbstractOperations
-
 include("Constants.jl")
 using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ, grav # these constants can be called inside any function
 
+using MAT
+
+file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/Code/ODE_solve_interpolate/fall_off/arc/collisionEfficiencyScatteredInterpolate.mat")  # open the .mat file
+collision_efficiency = read(file, "collisionEfficiencyScatteredInterpolate")  # read a specific variable from the file
+close(file)
+
 # setup grid: choose 128 data points
-depth = 1
+depth = 0.20
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
@@ -26,8 +32,54 @@ numSizeClasses = 200
 # choose radius intervals
 aspect_ratio = 50
 
-Tdiff = 1e-4
 Rs = range(0.01, 2, numSizeClasses) .* 1e-3
+
+# define a matrix which gives the effective collision area when allowing for the different orientations, call it collision radius
+function find_mean_collision_radius(Rs)
+    effective_areas = zeros(length(Rs), length(Rs))
+    for Riindx in eachindex(Rs)
+        rᵢ = Rs[Riindx]
+        for Rjindx in eachindex(Rs)
+            rⱼ = Rs[Rjindx]
+            effective_areas[Riindx, Rjindx] = 2*(rᵢ + rⱼ)*(1 + aspect_ratio)/(aspect_ratio * π)
+        end
+    end
+
+    return effective_areas
+end
+
+function find_collision_efficiency(Rs)
+    collision_efficiencies = [0, 0.1776, 0.2103, 0.4725, 0.5859, 0.5859]
+    ratios = [1, 2, 5, 10, 100, 200]
+    interp_linear = LinearInterpolation(ratios, collision_efficiencies)
+
+    collision_efficiency = zeros(length(Rs), length(Rs))
+    for Riindx in eachindex(Rs)
+        rᵢ = Rs[Riindx]
+        for Rjindx in eachindex(Rs)
+            rⱼ = Rs[Rjindx]
+            if rⱼ > rᵢ
+                ratio = rⱼ/rᵢ
+            else
+                ratio = rᵢ/rⱼ
+            end
+            collision_efficiency[Riindx, Rjindx] = interp_linear(ratio)
+            #
+            
+            #if ratio > 10
+            #    collision_efficiency[Riindx, Rjindx] = 0.5859
+            #elseif ratio > 5
+            #    collision_efficiency[Riindx, Rjindx] = 0.4725
+            #elseif ratio > 2
+            #    collision_efficiency[Riindx, Rjindx] = 0.2103
+            #else
+            #    collision_efficiency[Riindx, Rjindx] = 0.1776
+            #end
+        end
+    end
+
+    return collision_efficiency
+end
 
 #Rs = [0.01, 0.05, 0.15, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 2] .* 1e-3
 Hs = 2*Rs/aspect_ratio
@@ -57,15 +109,18 @@ function progress(simulation)
     n8 = simulation.model.tracers.n8
     n9 = simulation.model.tracers.n9
     n10 = simulation.model.tracers.n10
+    n50 = simulation.model.tracers.n50 
+    n100 = simulation.model.tracers.n100
+    n200 = simulation.model.tracers.n200
 
     # Print a progress message
     #msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, wall time: %s\n",
-    msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, n1 = %.1e, n2 = %.1e, n3 = %.1e, n4 = %.1e, n5 = %.1e, n6 = %.1e, n7 = %.1e, n8 = %.1e, n9 = %.1e, n10 = %.1e, Tmin = %.5f, Tmax = %.5f, wall time: %s\n",
+    msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, n1 = %.1e, n2 = %.1e, n3 = %.1e, n4 = %.1e, n5 = %.1e, n6 = %.1e, n7 = %.1e, n8 = %.1e, n9 = %.1e, n10 = %.1e, n50 = %.1e, n100 = %.1e, n200 = %.1e, Tmin = %.5f, Tmax = %.5f, wall time: %s\n",
     iteration(simulation),
     prettytime(time(simulation)),
     prettytime(simulation.Δt),
     maximum(abs, u), maximum(abs, v), maximum(abs, w),
-    minimum(n1), minimum(n2), minimum(n3), minimum(n4), minimum(n5), minimum(n6), minimum(n7), minimum(n8), minimum(n9), minimum(n10), 
+    minimum(n1), minimum(n2), minimum(n3), minimum(n4), minimum(n5), minimum(n6), minimum(n7), minimum(n8), minimum(n9), minimum(n10), minimum(n50), minimum(n100), minimum(n200), 
     #maximum(n1), maximum(n2), maximum(n3), maximum(n4), maximum(n5), maximum(n6), maximum(n7), maximum(n8), maximum(n9), maximum(n10), 
     minimum(T), maximum(T),
     prettytime(simulation.run_wall_time))
@@ -118,6 +173,8 @@ function find_β_α_Vol_constants()
 end
 
 αs, βs, αVolconst, βVolconst  = find_β_α_Vol_constants()
+effective_areas = find_mean_collision_radius(Rs)
+#collision_efficiency = find_collision_efficiency(Rs)
 
 function find_steady_velocity_via_iteration()
     vginitial = range(start = 1e-8, stop = 1e-1, step = 1e-9)
@@ -143,17 +200,18 @@ vgs = find_steady_velocity_via_iteration()
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
 
-cvelnum = 3
+cvelnum = 1
 pnum = 2
 
 #for cvelnum = [2, 3] #[1, 2, 3]
 #for pnum = [1, 2]
-end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_T_" * string(Tdiff)
+end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
 crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
-effective_radius = true # add in their effective radius
+effective_radius = false #true # add in their effective radius
+averaged_radius = true # use their averaged radius
 
 if collision_velocity_parameterisation_num == 2
     end_name = end_name * "_new_cyl"
@@ -162,6 +220,9 @@ elseif collision_velocity_parameterisation_num == 3
 end
 if concentration_parameterisation_num == 2
     end_name = end_name * "_sum_nj"
+end
+if averaged_radius
+    end_name = end_name * "_r_av"
 end
 
 function find_Vi(R, H)
@@ -180,8 +241,8 @@ function find_steady_velocity(indx)
 end
 
 function find_growth_rate(T, Rᵢ, H)
-    G = kl*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
-    #G = kl*Nu/(ρᵢ*Lat) * (Tf - T) * 2π * H
+    #G = kl*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
+    G = kl*Nu/(ρᵢ*Lat) * (Tf - T) * 2π * H
     return G
 end
 
@@ -201,20 +262,8 @@ function find_vcoll(vᵣ, vₜ)
     return vcoll
 end
 
-function temperature_forcing_constant(T, S, indx)
-    # constant in front of each concentration
-    #Rᵢ = Rs[indx]
-    H = Hs[indx]
-    ρ = find_density(T, S)
-    Tconstᵢ = kl*Nu/(volume * ρ*cᴾ) * (Tf - T) * 2π * H
-    #Tconstᵢ = kl*Nu/(volume * ρ*cᴾ) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
-    return Tconstᵢ
-end
 
-function T_forcing_func(z, t, T, S, tracers...)
-    tracers_named = NamedTuple{Tuple(Symbol("n$i") for i in 1:numSizeClasses)}(tracers)
-    return sum(temperature_forcing_constant(T, S, i) * tracers_named[Symbol("n$i")] for i in 1:numSizeClasses)
-end
+
 
 function get_vₜ_effective_radius_collision_velocity_parameterisation_num_2(indx, Rindx)
     return (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
@@ -248,7 +297,6 @@ function get_vₜ_same_radius_collision_velocity_parameterisation_num_13(indx)
     return  sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
 end
 
-
 function get_Fenc_effective_radius_collision_velocity_parameterisation_num_3(indx, Rindx, nRindx, vcoll)
     if indx == Rindx
         Fenc = (3/(2*aspect_ratio))^(2/3) * π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
@@ -263,6 +311,16 @@ function get_Fenc_collision_velocity_parameterisation_num_3(indx, Rindx, nRindx,
         Fenc =  π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
     else
         Fenc =  2*π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+    end
+    return Fenc
+end
+
+
+function get_Fenc_average_radius_collision_velocity_parameterisation_num_12(indx, Rindx, nRindx, vcoll)
+    if indx == Rindx
+        Fenc =  effective_areas[indx, Rindx] * nRindx/2 * vcoll
+    else
+        Fenc = effective_areas[Rindx, Rindx] * nRindx * vcoll
     end
     return Fenc
 end
@@ -295,6 +353,11 @@ function get_Fenc_p1_collision_velocity_parameterisation_num_3(indx, vcoll, ntot
     return 2*π*(Rs[indx])^2 * vcoll * ntot
 end
 
+function get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_12(indx, vcoll, ntot)
+    #Fenc = (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot
+    return effective_areas[indx, indx]  * vcoll * ntot
+end
+
 function get_Fenc_p1_effective_radius_collision_velocity_parameterisation_num_12(indx, vcoll, ntot)
     #Fenc = (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot
     return (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot
@@ -305,6 +368,18 @@ function get_Fenc_p1_collision_velocity_parameterisation_num_12(indx, vcoll, nto
     return π*(Rs[indx])^2 * vcoll * ntot
 end
 
+function get_Fefficiency_ndensity(indx, Rindx)
+    Feff = collision_efficiency[indx, Rindx]
+    return Feff
+end
+
+function get_Fefficiency_nsum(indx)
+    Feff = collision_efficiency[indx, indx]
+    return Feff
+end
+
+
+
 if effective_radius
     if collision_velocity_parameterisation_num == 3
         get_Fenc = get_Fenc_effective_radius_collision_velocity_parameterisation_num_3
@@ -312,6 +387,14 @@ if effective_radius
     else
         get_Fenc = get_Fenc_effective_radius_collision_velocity_parameterisation_num_12
         get_Fenc_ndensity = get_Fenc_p1_effective_radius_collision_velocity_parameterisation_num_12
+    end
+elseif averaged_radius
+    if collision_velocity_parameterisation_num == 3
+        get_Fenc = get_Fenc_average_radius_collision_velocity_parameterisation_num_3
+        get_Fenc_ndensity = get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_3
+    else
+        get_Fenc = get_Fenc_average_radius_collision_velocity_parameterisation_num_12
+        get_Fenc_ndensity = get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_12
     end
 else
     if collision_velocity_parameterisation_num == 3
@@ -331,6 +414,14 @@ if effective_radius
         get_vₜ = get_vₜ_effective_radius_collision_velocity_parameterisation_num_13
         get_vₜ_same_radius = get_vₜ_same_radius_collision_velocity_parameterisation_num_2
     end
+elseif averaged_radius
+    if collision_velocity_parameterisation_num == 2
+        get_vₜ = get_vₜ_averaged_radius_collision_velocity_parameterisation_num_2
+        get_vₜ_same_radius = get_vₜ_same_radius_averaged_radius_collision_velocity_parameterisation_num_2
+    else
+        get_vₜ = get_vₜ_averaged_radius_collision_velocity_parameterisation_num_13
+        get_vₜ_same_radius = get_vₜ_same_radius_collision_velocity_parameterisation_num_2
+    end
 else
     if collision_velocity_parameterisation_num == 2
         get_vₜ = get_vₜ_collision_velocity_parameterisation_num_2
@@ -343,20 +434,20 @@ end
 
 function coll_freq_concentration_parameterisation_num_2(model_fields, indx)
     uᵢ = find_steady_velocity(indx)
-    Fenc = zeros(1, 1, numz)
+    Fcoll = zeros(1, 1, numz)
     for Rindx in eachindex(Rs)
         nRindx = getfield(model_fields, Symbol("n$Rindx"))
         uRindx = find_steady_velocity(Rindx) # find rise velocity of crystal j
         vₜ = get_vₜ(indx, Rindx)
         vcoll = find_vcoll(uRindx - uᵢ, vₜ)
-        Fenc .+= get_Fenc(indx, Rindx, nRindx, vcoll) 
+        Fcoll .+= get_Fenc(indx, Rindx, nRindx, vcoll) #* get_Fefficiency_ndensity(indx, Rindx)
     end   
-    return Fenc
+    return Fcoll
 end
 
 function coll_freq_concentration_parameterisation_num_1(model_fields, indx)
     # get collision frquency
-    Fenc = zeros(1, 1, numz)
+    Fcoll = zeros(1, 1, numz)
     vₜ = get_vₜ_same_radius(indx)
     uᵢ = find_steady_velocity(indx)
     vcoll = find_vcoll(uᵢ, vₜ)
@@ -366,9 +457,9 @@ function coll_freq_concentration_parameterisation_num_1(model_fields, indx)
         nTotal .+= nRindx
     end
     ntot = min.(nTotal, nmax)
-    Fenc = get_Fenc_ndensity(indx, vcoll, ntot)
+    Fcoll = get_Fenc_ndensity(indx, vcoll, ntot) #* get_Fefficiency_nsum(indx)
 
-    return Fenc
+    return Fcoll
 end
 
 if concentration_parameterisation_num == 1
@@ -379,6 +470,7 @@ end
 
 function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
     Vᵢ = find_Vi(Rs[indx], Hs[indx])
+    #uᵢ = find_steady_velocity(indx)
     # Compute derivative for nᵢ
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
     Fenc = coll_freq_concentration_parameterisation(model_fields, indx)
@@ -392,43 +484,41 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
         dn_coll = αVolconst[indx] * Fcoll /volume
     end
 
-    # growth term
-    Gₙ₋₁ = find_growth_rate(model_fields.T, Rs[indx-1], Hs[indx-1])
-    Gₙ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
-    Vₙ₋₁ = find_Vi(Rs[indx-1], Hs[indx-1])
-    Vᵢ = find_Vi(Rs[indx], Hs[indx])
-
-    if Gₙ₋₁[i, j, k] > 0 # growth
-        nₙ₋₁ = getfield(model_fields, Symbol("n$(indx-1)"))
-        return @inbounds Gₙ₋₁[i, j, k]*nₙ₋₁[i, j, k]/(Vᵢ - Vₙ₋₁) + dn_coll[i, j, k]
-    else # melt
-        final_conc = (Gₙ[i, j, k]*nᵢ[i, j, k])/(Vᵢ - Vₙ₋₁) + dn_coll[i, j, k]
-        return @inbounds  final_conc
-    end
+    #if G₂[i, j, k] > 0 # growth
+        #final_conc = G₂[i, j, k]*model_fields.n9[i, j, k]/(Vᵢ - V₂) + dn_coll[i, j, k] + udn_dz[i, j, k]
+        #print(", udn/dz= ", udn_dz[1, 1, 1], ", ")
+        #return @inbounds final_conc
+    #else # melt
+        #final_conc = (G₃[i, j, k]*model_fields.n10[i, j, k])/(Vᵢ - V₂) + dn_coll[i, j, k] + udn_dz[i, j, k]
+        #return @inbounds  final_conc
+    #end
+    return dn_coll[i, j, k]
 
 end
 
 function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #ρ = find_density(model_fields.T, model_fields.S)
-    
+    #uᵢ = find_steady_velocity(indx)
+
     # Compute derivative for nᵢ
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
-    nᵢ = max.(nᵢ, 0)
+    #nᵢ = max.(nᵢ, 0)
 
     # Extend velocity array (avoid index errors)
-    
+    #udn_dz = -nᵢ .* uᵢ /depth #use the faces below
+
     # Access nᵢ₋₁ and nᵢ₊₁ safely
-    n_im1 = getfield(model_fields, Symbol("n$(indx-1)"))  # Field nᵢ₋₁
-    n_ip1 = getfield(model_fields, Symbol("n$(indx+1)"))  # Field nᵢ₊₁
+    #n_im1 = getfield(model_fields, Symbol("n$(indx-1)"))  # Field nᵢ₋₁
+    #n_ip1 = getfield(model_fields, Symbol("n$(indx+1)"))  # Field nᵢ₊₁
 
     # Compute growth rates and Vi values dynamically
-    Gᵢ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
-    G_im1 = find_growth_rate(model_fields.T, Rs[indx-1], Hs[indx-1])
-    G_ip1 = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
+    #Gᵢ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
+    #G_im1 = find_growth_rate(model_fields.T, Rs[indx-1], Hs[indx-1])
+    #G_ip1 = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
 
     Vᵢ = find_Vi(Rs[indx], Hs[indx])
-    V_im1 = find_Vi(Rs[indx-1], Hs[indx-1])
-    V_ip1 = find_Vi(Rs[indx+1], Hs[indx+1])
+    #V_im1 = find_Vi(Rs[indx-1], Hs[indx-1])
+    #V_ip1 = find_Vi(Rs[indx+1], Hs[indx+1])
 
     # get collision frquency
     if αs[indx] == 0
@@ -451,6 +541,7 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     end
     
 
+
     # crystal size redistribution
     if crystal_size_collision_redistribution == 1
         dn_coll = - V₁/Vᵢ * Fcoll/volume
@@ -460,23 +551,28 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #print("n2", maximum(dn_coll))
 
     # Apply logic for growth and melting
-    if G_im1[i, j, k] > 0  # Growth case
-        return @inbounds - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k]
-    else  # Melt case
-        return @inbounds - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k]
-    end
+    #if G_im1[i, j, k] > 0  # Growth case
+    #    final_conc = - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] + udn_dz[i, j, k]
+    #    return @inbounds final_conc
+    #else  # Melt case
+    #    final_conc = - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] + udn_dz[i, j, k]
+    #    return @inbounds final_conc
+    #end
+    return @inbounds dn_coll[i, j, k]
 end
 
 
 function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
+    uᵢ = find_steady_velocity(indx)
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
-    nᵢ = max.(nᵢ, 0)
-    
+    #nᵢ = max.(nᵢ, 0)
+    #udn_dz = -nᵢ .* uᵢ /depth #use the faces below
+
     # growth term
-    G₁ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
-    G₂ = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
-    V₁ = find_Vi(Rs[indx], Hs[indx])
-    V₂ = find_Vi(Rs[indx+1], Hs[indx+1])
+    #G₁ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
+    #G₂ = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
+    #V₁ = find_Vi(Rs[indx], Hs[indx])
+    #V₂ = find_Vi(Rs[indx+1], Hs[indx+1])
 
     # get collision frquency
     Fcollsum =  zeros(1, 1, numz)
@@ -493,12 +589,16 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     else
         dn_coll = ζ * Fcollsum / volume
     end
-    
-    if G₁[i, j, k] > 0 # growth
-        return @inbounds  - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) + dn_coll[i, j, k]
-    else # melt
-        return @inbounds   - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k]
-    end
+    #print("n1", maximum(dn_coll))
+
+    #if G₁[i, j, k] > 0 # growth
+    #    final_conc =   - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) + dn_coll[i, j, k] + udn_dz[i, j, k]
+    #    return @inbounds final_conc
+    #else # melt
+    #    final_conc = - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k] + udn_dz[i, j, k]
+        
+    return @inbounds  dn_coll[i, j, k]
+    #end
 end
 
 ################################ define forcing functions ###########################################
@@ -510,13 +610,11 @@ n_range_tracers = 2:numSizeClasses
 forcing_dict = Dict(Symbol("n$n") => Forcing(nintermediate_forcing_func, discrete_form=true, parameters=n) for n in n_range_forcing)
 n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = 1)
 nend_forcing = Forcing(nend_forcing_func, discrete_form=true, parameters = numSizeClasses)
-
-T_field_dependencies = (:T, :S, (Symbol("n$i") for i in 1:numSizeClasses)...)
-T_forcing = Forcing(T_forcing_func, field_dependencies=T_field_dependencies)
+#T_forcing = Forcing(T_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3, :n4, :n5, :n6, :n7, :n8, :n9, :n10))
 #S_forcing = Forcing(S_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3))
 
 # Merge `n1_forcing` with the dynamic forcing dictionary and convert to NamedTuple
-forcing_combined = (; Dict(:T => T_forcing)..., Dict(:n1 => n1_forcing)..., forcing_dict..., Dict(Symbol("n$numSizeClasses") => nend_forcing)...)
+forcing_combined = (; Dict(:n1 => n1_forcing)..., forcing_dict..., Dict(Symbol("n$numSizeClasses") => nend_forcing)...)
 
 ######################### setup model ########################################
 
@@ -538,19 +636,55 @@ ninitial_dict = Dict(Symbol("n$n") => nᵢₙ[n] for n in 1:numSizeClasses)
 ninitial = (; ninitial_dict...)
 
 # set the initial conditions
-Tᵢ = Tf - Tdiff #* Ξₜ(z)
+Tᵢ = Tf - 1e-4 #* Ξₜ(z)
 #set!(model, u=0, v=0, w=0, T=Tᵢ, n1 = nᵢₙ[1], n2 = nᵢₙ[2], n3 = nᵢₙ[3], n4 = nᵢₙ[4], n5 = nᵢₙ[5], n6 = nᵢₙ[6], n7 = nᵢₙ[7], n8 = nᵢₙ[8], n9 = nᵢₙ[9], n10 = nᵢₙ[10], S=34.5)
 # Set initial conditions using `set!`
 set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 
 ########################## run model #######################################
 
-simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
+#simulation = Simulation(model, Δt=1.0, stop_time=0.1minutes)
+simulation = Simulation(model, Δt=1.0, stop_time=2minutes)
 
 # Define the enforce_nonnegative_tracer function
+function enforce_nonnegative_tracer_old(simulation)
+    n1_data = simulation.model.tracers.n1.data
+    @inbounds n1_data .= max.(n1_data, 0)
+
+    n2_data = simulation.model.tracers.n2.data
+    @inbounds n2_data .= max.(n2_data, 0)
+
+    n3_data = simulation.model.tracers.n3.data
+    @inbounds n3_data .= max.(n3_data, 0)
+
+    n4_data = simulation.model.tracers.n4.data
+    @inbounds n4_data .= max.(n4_data, 0)
+
+    n5_data = simulation.model.tracers.n5.data
+    @inbounds n5_data .= max.(n5_data, 0)
+
+    n6_data = simulation.model.tracers.n6.data
+    @inbounds n6_data .= max.(n6_data, 0)
+
+    n7_data = simulation.model.tracers.n7.data
+    @inbounds n7_data .= max.(n7_data, 0)
+
+    n8_data = simulation.model.tracers.n8.data
+    @inbounds n8_data .= max.(n8_data, 0)
+
+    n9_data = simulation.model.tracers.n9.data
+    @inbounds n9_data .= max.(n9_data, 0)
+
+    n10_data = simulation.model.tracers.n10.data
+    @inbounds n10_data .= max.(n10_data, 0)
+
+    return nothing
+end
+
 function enforce_nonnegative_tracer(simulation)
     for n in 1:numSizeClasses
         tracer_data = getproperty(simulation.model.tracers, Symbol("n$n")).data
+        #@inbounds tracer_data .= max.(tracer_data, 1e-50)
         @inbounds tracer_data .= max.(tracer_data, 0)
     end
     return nothing
@@ -561,11 +695,15 @@ grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 
 # Add the callback to enforce non-negativity
 add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
-add_callback!(simulation, progress, IterationInterval(20))
+add_callback!(simulation, progress, IterationInterval(1))
 
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute)#0.01minute)
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.000001minute) # for n = 1, p = 1, eps = 1e-2
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.00001minute) # for n = 1, p = 2, eps = 1e-2
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.0001minute) # for n = 1, p = 2
 
-output_interval = 0.1minutes
+#simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
+
+output_interval = 0.001minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 
@@ -581,4 +719,4 @@ S = model.tracers.S
 
 run!(simulation)
 #end
-#endh
+#end

@@ -27,15 +27,12 @@ plotstep = 39
 numpdflines = 4
 Rs = range(0.01, 2, numSizeClasses) .* 1e-3
 depth = 1
-Tdiff = 1e-4
 
-ns_to_plot = [1, 40, 80, 120, 160, 200]
-
-ϵ = 1e-8 #7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-2 #7.4 * 1e-6 #10^-3 # m²s⁻³
 #feltham_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)#"_same_n_just_collisions_epsilon" * string(ϵ)
-#feltham_name = "hfast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_depth_" * string(depth)
-feltham_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
-#feltham_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_T_" * string(Tdiff)
+feltham_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_depth_" * string(depth)
+#feltham_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)  * "_sum_nj"
+
 
 #colours = cmap("Gouldian", N = length(Rs))
 colours = cmap("CBTL1", N = Int(1.2*length(Rs))) 
@@ -58,11 +55,11 @@ feltham_times = feltham_time_series.w.times
 feltham_times = feltham_times/60
 #feltham_times = feltham_times/(3600*24)
 
-cvelnum = 1
+cvelnum = 3
 pnum = 2
 #for cvelnum = [1]#[1, 2, 3]
 #for pnum = [2]#[1, 2]
-end_name = feltham_name
+end_name = feltham_name #"fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 new_label = ""
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
@@ -132,7 +129,7 @@ ax_n = Axis(fig[2, 3:4];
             #limits = ((tmin, tmax), (1e4, 1e6)))
             limits = ((tmin, tmax), (0.1, 2e13)))
 
-for n in ns_to_plot#range(1, stop=numSizeClasses, step=plotstep)
+for n in range(1, stop=numSizeClasses, step=plotstep)
     lines!(ax_Co, feltham_times, find_C_const(n) * find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))),
             linestyle=:solid, color=colours[n])
     lines!(ax_no, feltham_times, find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))), linestyle=:solid, color = colours[n])
@@ -283,7 +280,7 @@ end
 
 axislegend(ax_r, position=(:right, :bottom))
 
-for n in ns_to_plot #range(1, stop=numSizeClasses, step=plotstep)
+for n in range(1, stop=numSizeClasses, step=plotstep)
     lines!(ax_C, feltham_times, find_C_const(n) * find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))),
             linestyle=:dash, color=colours[n])
    lines!(ax_n, feltham_times, find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))), linestyle=:dash, color = colours[n])
@@ -340,7 +337,7 @@ for (i, n1val) in enumerate(exp10.(range(start=log10(n1max/10), stop=log10(n1max
     pdf, barvals = generatePDF(tindx, time_series)
     lines!(ax_r, pdf.x*1000, pdf.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
 end
-for n in ns_to_plot #range(1, stop=numSizeClasses, step=plotstep)
+for n in range(1, stop=numSizeClasses, step=plotstep)
     lines!(ax_C, feltham_times, find_C_const(n) * find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))),
             linestyle=:dash, color=colours[n])
    lines!(ax_n, feltham_times, find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))), linestyle=:dash, color = colours[n])
@@ -425,7 +422,7 @@ end
 axislegend(ax_rt, position=(:right, :bottom))
 axislegend(ax_rn, position=(:right, :bottom))
 
-for n in ns_to_plot #range(1, stop=numSizeClasses, step=plotstep)
+for n in range(1, stop=numSizeClasses, step=plotstep)
     lines!(ax_C, feltham_times, find_C_const(n) * find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))),
             linestyle=:dash, color=colours[n])
     lines!(ax_n, feltham_times, find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))), linestyle=:dash, color = colours[n])
@@ -443,62 +440,3 @@ fig
 #save(end_name * "_4_compare_zoom_max.png", fig)
 save(end_name * "_compare_nomax_4ontop.png", fig)
 save(end_name * "_compare_nomax_4ontop.eps", fig)
-
-fig = Figure(size = (850, 350))
-
-ax_rn = Axis(fig[1, 3];
-            ylabel ="n(r)",
-            xlabel = "r (mm)")
-            #yscale = log10)
-
-ax_C = Axis(fig[1, 2];
-            ylabel = "Cᵢ",
-            xlabel = "time (minutes)",
-            yscale = log10,
-            limits = ((tmin, tmax), (1e-15, 2e-3)))
-
-ax_n = Axis(fig[1, 1];
-            ylabel = "nᵢ",
-            xlabel = "time (minutes)",
-            yscale = log10,
-            #limits = ((tmin, tmax), (1e4, 1e6)))
-            limits = ((tmin, tmax), (0.1, 2e13)))
-
-# find the times when n2 has reduced by 1/10, 1/100, 1/1000, 1/10^4
-n1max = maximum(find_z_mean(time_series.n1))
-n1initial = time_series.n1[1, 1, 1, 1]
-
-for (i, n1val) in enumerate(exp10.(range(start=log10(n1max/10), stop=log10(n1max/1.001), length=numpdflines)))
-    exp = floor(Int, log10(abs(n1val)))
-    coeff = round(n1val / 10^exp, digits = 1)
-    label_str = L"n_1 = %$coeff \times 10^{%$exp}"
-
-    tindx = argmin(abs.(find_z_mean(feltham_time_series.n1) .- n1val))
-    pdf, barvals = generatePDF(tindx, feltham_time_series)
-    lines!(ax_rn, pdf.x*1000, pdf.density, linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
-
-    tindx = argmin(abs.(find_z_mean(time_series.n1) .- n1val))
-    pdf, barvals = generatePDF(tindx, time_series)
-    lines!(ax_rn, pdf.x*1000, pdf.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
-end
-
-axislegend(ax_rn, position=(:left, :top))
-
-for n in ns_to_plot #range(1, stop=numSizeClasses, step=plotstep)
-    lines!(ax_C, feltham_times, find_C_const(n) * find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))),
-            linestyle=:dash, color=colours[n])
-    lines!(ax_n, feltham_times, find_z_mean(getproperty(feltham_time_series, Symbol("n$n"))), linestyle=:dash, color = colours[n])
-
-    lines!(ax_C, times, find_C_const(n) * find_z_mean(getproperty(time_series, Symbol("n$n"))),
-            linestyle=:solid, color=colours[n], label=L"C_{%$n}")
-    lines!(ax_n, times, find_z_mean(getproperty(time_series, Symbol("n$n"))), linestyle=:solid, color = colours[n], label=L"n_{%$n}")
-end
-
-axislegend(ax_C)
-axislegend(ax_n)
-
-fig
-
-#save(end_name * "_4_compare_zoom_max.png", fig)
-save(end_name * "_compare_nomax_3ontop.png", fig)
-save(end_name * "_compare_nomax_3ontop.eps", fig)

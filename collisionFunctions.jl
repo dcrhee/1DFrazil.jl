@@ -16,7 +16,7 @@ depth = 0.20
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
-numSizeClasses = 50
+numSizeClasses = 200
 
 # run with the higher values of epsilon and see if it makes a difference using the different formulations
 
@@ -25,8 +25,21 @@ numSizeClasses = 50
 # choose radius intervals
 aspect_ratio = 50
 
-#
 Rs = range(0.01, 2, numSizeClasses) .* 1e-3
+
+# define a matrix which gives the effective collision area when allowing for the different orientations, call it collision radius
+function find_mean_collision_radius(Rs)
+    effective_areas = zeros(length(Rs), length(Rs))
+    for Riindx in eachindex(Rs)
+        rᵢ = Rs[Riindx]
+        for Rjindx in eachindex(Rs)
+            rⱼ = Rs[Rjindx]
+            effective_areas[Riindx, Rjindx] = π / (2 * aspect_ratio^2 * π^2) * (4*rᵢ*rⱼ * (2 - π + 2 * aspect_ratio * π + aspect_ratio^2 * (2 + π)) + rⱼ^2 * π * (π + aspect_ratio * (4 + aspect_ratio * π)) + rᵢ^2 * (-4 + π^2 + aspect_ratio^2 * (4 + π^2))  )
+        end
+    end
+
+    return effective_areas
+end
 
 #Rs = [0.01, 0.05, 0.15, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 2] .* 1e-3
 Hs = 2*Rs/aspect_ratio
@@ -35,7 +48,7 @@ Vs = π * Rs.^2 .* Hs
 V₁ = Vs[1]
 Vₙ = Vs[end]
 
-ϵ = 1e-2#7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-8#7.4 * 1e-6 #10^-3 # m²s⁻³
 ν = 1.95 * 1e-6
 Cᵢₙ =  4 * 1e-8
 nmax = 10^20 #6429774.231059961 #10^20#10^3 * volume
@@ -56,15 +69,16 @@ function progress(simulation)
     n8 = simulation.model.tracers.n8
     n9 = simulation.model.tracers.n9
     n10 = simulation.model.tracers.n10
+    n200 = simulation.model.tracers.n200
 
     # Print a progress message
     #msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, wall time: %s\n",
-    msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, n1 = %.1e, n2 = %.1e, n3 = %.1e, n4 = %.1e, n5 = %.1e, n6 = %.1e, n7 = %.1e, n8 = %.1e, n9 = %.1e, n10 = %.1e, Tmin = %.5f, Tmax = %.5f, wall time: %s\n",
+    msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, n1 = %.1e, n2 = %.1e, n3 = %.1e, n4 = %.1e, n5 = %.1e, n6 = %.1e, n7 = %.1e, n8 = %.1e, n9 = %.1e, n10 = %.1e, n200 = %.1e, Tmin = %.5f, Tmax = %.5f, wall time: %s\n",
     iteration(simulation),
     prettytime(time(simulation)),
     prettytime(simulation.Δt),
     maximum(abs, u), maximum(abs, v), maximum(abs, w),
-    minimum(n1), minimum(n2), minimum(n3), minimum(n4), minimum(n5), minimum(n6), minimum(n7), minimum(n8), minimum(n9), minimum(n10), 
+    minimum(n1), minimum(n2), minimum(n3), minimum(n4), minimum(n5), minimum(n6), minimum(n7), minimum(n8), minimum(n9), minimum(n10), minimum(n200), 
     #maximum(n1), maximum(n2), maximum(n3), maximum(n4), maximum(n5), maximum(n6), maximum(n7), maximum(n8), maximum(n9), maximum(n10), 
     minimum(T), maximum(T),
     prettytime(simulation.run_wall_time))
@@ -117,6 +131,7 @@ function find_β_α_Vol_constants()
 end
 
 αs, βs, αVolconst, βVolconst  = find_β_α_Vol_constants()
+effective_areas = find_mean_collision_radius(Rs)
 
 function find_steady_velocity_via_iteration()
     vginitial = range(start = 1e-8, stop = 1e-1, step = 1e-9)
@@ -147,12 +162,13 @@ pnum = 1
 
 #for cvelnum = [2, 3] #[1, 2, 3]
 #for pnum = [1, 2]
-end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
+end_name = "lfast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
 crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
-effective_radius = true # add in their effective radius
+effective_radius = false #true # add in their effective radius
+averaged_radius = true # use their averaged radius
 
 if collision_velocity_parameterisation_num == 2
     end_name = end_name * "_new_cyl"
@@ -161,6 +177,9 @@ elseif collision_velocity_parameterisation_num == 3
 end
 if concentration_parameterisation_num == 2
     end_name = end_name * "_sum_nj"
+end
+if averaged_radius
+    end_name = end_name * "_r_av"
 end
 
 function find_Vi(R, H)
@@ -235,7 +254,6 @@ function get_vₜ_same_radius_collision_velocity_parameterisation_num_13(indx)
     return  sqrt(ϵ/(15ν))*(2*Rs[indx]) # spherical approximation
 end
 
-
 function get_Fenc_effective_radius_collision_velocity_parameterisation_num_3(indx, Rindx, nRindx, vcoll)
     if indx == Rindx
         Fenc = (3/(2*aspect_ratio))^(2/3) * π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
@@ -250,6 +268,16 @@ function get_Fenc_collision_velocity_parameterisation_num_3(indx, Rindx, nRindx,
         Fenc =  π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
     else
         Fenc =  2*π*(Rs[indx] + Rs[Rindx])^2 * nRindx * vcoll
+    end
+    return Fenc
+end
+
+
+function get_Fenc_average_radius_collision_velocity_parameterisation_num_12(indx, Rindx, nRindx, vcoll)
+    if indx == Rindx
+        Fenc =  effective_areas[indx, Rindx] * nRindx/2 * vcoll
+    else
+        Fenc = effective_areas[Rindx, Rindx] * nRindx * vcoll
     end
     return Fenc
 end
@@ -282,6 +310,11 @@ function get_Fenc_p1_collision_velocity_parameterisation_num_3(indx, vcoll, ntot
     return 2*π*(Rs[indx])^2 * vcoll * ntot
 end
 
+function get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_12(indx, vcoll, ntot)
+    #Fenc = (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot
+    return effective_areas[indx, indx]  * vcoll * ntot
+end
+
 function get_Fenc_p1_effective_radius_collision_velocity_parameterisation_num_12(indx, vcoll, ntot)
     #Fenc = (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot
     return (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot
@@ -299,6 +332,14 @@ if effective_radius
     else
         get_Fenc = get_Fenc_effective_radius_collision_velocity_parameterisation_num_12
         get_Fenc_ndensity = get_Fenc_p1_effective_radius_collision_velocity_parameterisation_num_12
+    end
+elseif averaged_radius
+    if collision_velocity_parameterisation_num == 3
+        get_Fenc = get_Fenc_average_radius_collision_velocity_parameterisation_num_3
+        get_Fenc_ndensity = get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_3
+    else
+        get_Fenc = get_Fenc_average_radius_collision_velocity_parameterisation_num_12
+        get_Fenc_ndensity = get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_12
     end
 else
     if collision_velocity_parameterisation_num == 3
@@ -539,7 +580,7 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 
 ########################## run model #######################################
 
-simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
+simulation = Simulation(model, Δt=1.0, stop_time=1200minutes)
 
 # Define the enforce_nonnegative_tracer function
 function enforce_nonnegative_tracer_old(simulation)
@@ -579,7 +620,8 @@ end
 function enforce_nonnegative_tracer(simulation)
     for n in 1:numSizeClasses
         tracer_data = getproperty(simulation.model.tracers, Symbol("n$n")).data
-        @inbounds tracer_data .= max.(tracer_data, 0)
+        @inbounds tracer_data .= max.(tracer_data, 1e-50)
+        #@inbounds tracer_data .= max.(tracer_data, 0)
     end
     return nothing
 end
@@ -588,14 +630,14 @@ end
 grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 
 # Add the callback to enforce non-negativity
-#add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
+add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(20))
 
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute)#0.01minute)
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.1minute)#0.01minute)
 
 #simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
-output_interval = 0.1minutes
+output_interval = 1minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 

@@ -16,7 +16,7 @@ depth = 1
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
-numSizeClasses = 50
+numSizeClasses = 200
 
 # run with the higher values of epsilon and see if it makes a difference using the different formulations
 
@@ -142,12 +142,12 @@ vgs = find_steady_velocity_via_iteration()
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
 
-cvelnum = 1
-pnum = 1
+cvelnum = 3
+pnum = 2
 
 #for cvelnum = [2, 3] #[1, 2, 3]
 #for pnum = [1, 2]
-end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_depth_" * string(depth)
+end_name = "hfast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_depth_" * string(depth)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
@@ -540,7 +540,7 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 
 ########################## run model #######################################
 
-simulation = Simulation(model, Δt=1.0, stop_time=3hours)
+simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
 
 # Define the enforce_nonnegative_tracer function
 function enforce_nonnegative_tracer_old(simulation)
@@ -594,7 +594,7 @@ add_callback!(simulation, progress, IterationInterval(20))
 
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute)#0.01minute)
 
-output_interval = 0.1minutes
+output_interval = 0.01minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 

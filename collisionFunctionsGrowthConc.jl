@@ -17,8 +17,8 @@ depth = 1
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
-numSizeClasses = 200
-
+numSizeClasses = 50
+Tdiff = 1e-4
 # run with the higher values of epsilon and see if it makes a difference using the different formulations
 
 # constants/parameters
@@ -26,7 +26,7 @@ numSizeClasses = 200
 # choose radius intervals
 aspect_ratio = 50
 
-Tdiff = 1e-4
+#
 Rs = range(0.01, 2, numSizeClasses) .* 1e-3
 
 #Rs = [0.01, 0.05, 0.15, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 2] .* 1e-3
@@ -143,12 +143,12 @@ vgs = find_steady_velocity_via_iteration()
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
 
-cvelnum = 3
-pnum = 2
+cvelnum = 1
+pnum = 1
 
 #for cvelnum = [2, 3] #[1, 2, 3]
 #for pnum = [1, 2]
-end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_T_" * string(Tdiff)
+end_name = "fast_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_T_" * string(Tdiff)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
@@ -530,8 +530,8 @@ model = NonhydrostaticModel(; grid,
 )
 
 u, v, w = model.velocities
-#nᵢₙ = Cᵢₙ * aspect_ratio * volume / (2 * π * length(Rs)) * 1 ./ Rs.^3
-nᵢₙ = 6429774.231059961/length(Rs) * ones(length(Rs))
+nᵢₙ = Cᵢₙ * aspect_ratio * volume / (2 * π * length(Rs)) * 1 ./ Rs.^3
+#nᵢₙ = 6429774.231059961/length(Rs) * ones(length(Rs))
 
 # Create a dictionary for dynamically setting `n` values
 ninitial_dict = Dict(Symbol("n$n") => nᵢₙ[n] for n in 1:numSizeClasses)
@@ -545,7 +545,7 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 
 ########################## run model #######################################
 
-simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
+simulation = Simulation(model, Δt=1.0, stop_time=7000hours)
 
 # Define the enforce_nonnegative_tracer function
 function enforce_nonnegative_tracer(simulation)
@@ -563,9 +563,11 @@ grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(20))
 
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute)#0.01minute)
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.1hours)#0.01minute)
 
-output_interval = 0.1minutes
+#simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
+
+output_interval = 1hours
 
 fields_to_output = merge(model.velocities, model.tracers)
 

@@ -8,16 +8,15 @@ using Oceananigans.AbstractOperations: ∂z
 using Printf
 using Statistics
 using Oceananigans.AbstractOperations
-
 include("Constants.jl")
 using .Constants: Tf, ρₐ, ρₒ, ρᵢ, Cd, cᴾ, kl, Nu, α, Lat, αₛ, grav # these constants can be called inside any function
 
 # setup grid: choose 128 data points
-depth = 1
+depth = 0.20
 numz = 1 #128
 grid = RectilinearGrid(size=1, z = (-1, 0), topology=(Flat, Flat, Periodic))
 volume = 1
-numSizeClasses = 200
+numSizeClasses = 250
 
 # run with the higher values of epsilon and see if it makes a difference using the different formulations
 
@@ -26,7 +25,7 @@ numSizeClasses = 200
 # choose radius intervals
 aspect_ratio = 50
 
-Tdiff = 1e-4
+#
 Rs = range(0.01, 2, numSizeClasses) .* 1e-3
 
 #Rs = [0.01, 0.05, 0.15, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 2] .* 1e-3
@@ -36,7 +35,7 @@ Vs = π * Rs.^2 .* Hs
 V₁ = Vs[1]
 Vₙ = Vs[end]
 
-ϵ = 1e-2#7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-8#7.4 * 1e-6 #10^-3 # m²s⁻³
 ν = 1.95 * 1e-6
 Cᵢₙ =  4 * 1e-8
 nmax = 10^20 #6429774.231059961 #10^20#10^3 * volume
@@ -143,12 +142,12 @@ vgs = find_steady_velocity_via_iteration()
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
 
-cvelnum = 3
-pnum = 2
+cvelnum = 1
+pnum = 1
 
 #for cvelnum = [2, 3] #[1, 2, 3]
 #for pnum = [1, 2]
-end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_T_" * string(Tdiff)
+end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
@@ -180,8 +179,8 @@ function find_steady_velocity(indx)
 end
 
 function find_growth_rate(T, Rᵢ, H)
-    G = kl*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
-    #G = kl*Nu/(ρᵢ*Lat) * (Tf - T) * 2π * H
+    #G = kl*Nu/(ρᵢ*Lat) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
+    G = kl*Nu/(ρᵢ*Lat) * (Tf - T) * 2π * H
     return G
 end
 
@@ -201,20 +200,8 @@ function find_vcoll(vᵣ, vₜ)
     return vcoll
 end
 
-function temperature_forcing_constant(T, S, indx)
-    # constant in front of each concentration
-    #Rᵢ = Rs[indx]
-    H = Hs[indx]
-    ρ = find_density(T, S)
-    Tconstᵢ = kl*Nu/(volume * ρ*cᴾ) * (Tf - T) * 2π * H
-    #Tconstᵢ = kl*Nu/(volume * ρ*cᴾ) * (Tf - T) *2π * Rᵢ *  1/(0.9002 - 0.2634*log(H/(2*Rᵢ)))
-    return Tconstᵢ
-end
 
-function T_forcing_func(z, t, T, S, tracers...)
-    tracers_named = NamedTuple{Tuple(Symbol("n$i") for i in 1:numSizeClasses)}(tracers)
-    return sum(temperature_forcing_constant(T, S, i) * tracers_named[Symbol("n$i")] for i in 1:numSizeClasses)
-end
+
 
 function get_vₜ_effective_radius_collision_velocity_parameterisation_num_2(indx, Rindx)
     return (3/(2*aspect_ratio))^(1/3) * sqrt(ϵ/(15ν)*(sqrt(π/2) + sqrt(2/π)))*(Rs[indx] + Rs[Rindx]) # cylindrical approximation
@@ -379,6 +366,7 @@ end
 
 function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
     Vᵢ = find_Vi(Rs[indx], Hs[indx])
+    #uᵢ = find_steady_velocity(indx)
     # Compute derivative for nᵢ
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
     Fenc = coll_freq_concentration_parameterisation(model_fields, indx)
@@ -392,43 +380,41 @@ function nend_forcing_func(i, j, k, grid, clock, model_fields, indx)
         dn_coll = αVolconst[indx] * Fcoll /volume
     end
 
-    # growth term
-    Gₙ₋₁ = find_growth_rate(model_fields.T, Rs[indx-1], Hs[indx-1])
-    Gₙ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
-    Vₙ₋₁ = find_Vi(Rs[indx-1], Hs[indx-1])
-    Vᵢ = find_Vi(Rs[indx], Hs[indx])
-
-    if Gₙ₋₁[i, j, k] > 0 # growth
-        nₙ₋₁ = getfield(model_fields, Symbol("n$(indx-1)"))
-        return @inbounds Gₙ₋₁[i, j, k]*nₙ₋₁[i, j, k]/(Vᵢ - Vₙ₋₁) + dn_coll[i, j, k]
-    else # melt
-        final_conc = (Gₙ[i, j, k]*nᵢ[i, j, k])/(Vᵢ - Vₙ₋₁) + dn_coll[i, j, k]
-        return @inbounds  final_conc
-    end
+    #if G₂[i, j, k] > 0 # growth
+        #final_conc = G₂[i, j, k]*model_fields.n9[i, j, k]/(Vᵢ - V₂) + dn_coll[i, j, k] + udn_dz[i, j, k]
+        #print(", udn/dz= ", udn_dz[1, 1, 1], ", ")
+        #return @inbounds final_conc
+    #else # melt
+        #final_conc = (G₃[i, j, k]*model_fields.n10[i, j, k])/(Vᵢ - V₂) + dn_coll[i, j, k] + udn_dz[i, j, k]
+        #return @inbounds  final_conc
+    #end
+    return dn_coll[i, j, k]
 
 end
 
 function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #ρ = find_density(model_fields.T, model_fields.S)
-    
+    #uᵢ = find_steady_velocity(indx)
+
     # Compute derivative for nᵢ
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
-    nᵢ = max.(nᵢ, 0)
+    #nᵢ = max.(nᵢ, 0)
 
     # Extend velocity array (avoid index errors)
-    
+    #udn_dz = -nᵢ .* uᵢ /depth #use the faces below
+
     # Access nᵢ₋₁ and nᵢ₊₁ safely
-    n_im1 = getfield(model_fields, Symbol("n$(indx-1)"))  # Field nᵢ₋₁
-    n_ip1 = getfield(model_fields, Symbol("n$(indx+1)"))  # Field nᵢ₊₁
+    #n_im1 = getfield(model_fields, Symbol("n$(indx-1)"))  # Field nᵢ₋₁
+    #n_ip1 = getfield(model_fields, Symbol("n$(indx+1)"))  # Field nᵢ₊₁
 
     # Compute growth rates and Vi values dynamically
-    Gᵢ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
-    G_im1 = find_growth_rate(model_fields.T, Rs[indx-1], Hs[indx-1])
-    G_ip1 = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
+    #Gᵢ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
+    #G_im1 = find_growth_rate(model_fields.T, Rs[indx-1], Hs[indx-1])
+    #G_ip1 = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
 
     Vᵢ = find_Vi(Rs[indx], Hs[indx])
-    V_im1 = find_Vi(Rs[indx-1], Hs[indx-1])
-    V_ip1 = find_Vi(Rs[indx+1], Hs[indx+1])
+    #V_im1 = find_Vi(Rs[indx-1], Hs[indx-1])
+    #V_ip1 = find_Vi(Rs[indx+1], Hs[indx+1])
 
     # get collision frquency
     if αs[indx] == 0
@@ -451,6 +437,7 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     end
     
 
+
     # crystal size redistribution
     if crystal_size_collision_redistribution == 1
         dn_coll = - V₁/Vᵢ * Fcoll/volume
@@ -460,23 +447,28 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     #print("n2", maximum(dn_coll))
 
     # Apply logic for growth and melting
-    if G_im1[i, j, k] > 0  # Growth case
-        return @inbounds - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k]
-    else  # Melt case
-        return @inbounds - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k]
-    end
+    #if G_im1[i, j, k] > 0  # Growth case
+    #    final_conc = - (Gᵢ[i, j, k] * nᵢ[i, j, k] / (V_ip1 - Vᵢ) - G_im1[i, j, k] * n_im1[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] + udn_dz[i, j, k]
+    #    return @inbounds final_conc
+    #else  # Melt case
+    #    final_conc = - (G_ip1[i, j, k] * n_ip1[i, j, k] / (V_ip1 - Vᵢ) - Gᵢ[i, j, k] * nᵢ[i, j, k] / (Vᵢ - V_im1)) + dn_coll[i, j, k] + udn_dz[i, j, k]
+    #    return @inbounds final_conc
+    #end
+    return @inbounds dn_coll[i, j, k]
 end
 
 
 function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
+    uᵢ = find_steady_velocity(indx)
     nᵢ = getfield(model_fields, Symbol("n$indx"))  # Dynamically get field `nᵢ`
-    nᵢ = max.(nᵢ, 0)
-    
+    #nᵢ = max.(nᵢ, 0)
+    #udn_dz = -nᵢ .* uᵢ /depth #use the faces below
+
     # growth term
-    G₁ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
-    G₂ = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
-    V₁ = find_Vi(Rs[indx], Hs[indx])
-    V₂ = find_Vi(Rs[indx+1], Hs[indx+1])
+    #G₁ = find_growth_rate(model_fields.T, Rs[indx], Hs[indx])
+    #G₂ = find_growth_rate(model_fields.T, Rs[indx+1], Hs[indx+1])
+    #V₁ = find_Vi(Rs[indx], Hs[indx])
+    #V₂ = find_Vi(Rs[indx+1], Hs[indx+1])
 
     # get collision frquency
     Fcollsum =  zeros(1, 1, numz)
@@ -493,12 +485,16 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     else
         dn_coll = ζ * Fcollsum / volume
     end
-    
-    if G₁[i, j, k] > 0 # growth
-        return @inbounds  - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) + dn_coll[i, j, k]
-    else # melt
-        return @inbounds   - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k]
-    end
+    #print("n1", maximum(dn_coll))
+
+    #if G₁[i, j, k] > 0 # growth
+    #    final_conc =   - G₁[i, j, k]*model_fields.n1[i, j, k]/(V₂ - V₁) + dn_coll[i, j, k] + udn_dz[i, j, k]
+    #    return @inbounds final_conc
+    #else # melt
+    #    final_conc = - (G₂[i, j, k]*model_fields.n2[i, j, k]/(V₂ - V₁) - G₁[i, j, k]*model_fields.n1[i, j, k]/V₁) + dn_coll[i, j, k] + udn_dz[i, j, k]
+        
+    return @inbounds  dn_coll[i, j, k]
+    #end
 end
 
 ################################ define forcing functions ###########################################
@@ -510,13 +506,11 @@ n_range_tracers = 2:numSizeClasses
 forcing_dict = Dict(Symbol("n$n") => Forcing(nintermediate_forcing_func, discrete_form=true, parameters=n) for n in n_range_forcing)
 n1_forcing = Forcing(n1_forcing_func, discrete_form=true, parameters = 1)
 nend_forcing = Forcing(nend_forcing_func, discrete_form=true, parameters = numSizeClasses)
-
-T_field_dependencies = (:T, :S, (Symbol("n$i") for i in 1:numSizeClasses)...)
-T_forcing = Forcing(T_forcing_func, field_dependencies=T_field_dependencies)
+#T_forcing = Forcing(T_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3, :n4, :n5, :n6, :n7, :n8, :n9, :n10))
 #S_forcing = Forcing(S_forcing_func, field_dependencies=(:T, :S, :n1, :n2, :n3))
 
 # Merge `n1_forcing` with the dynamic forcing dictionary and convert to NamedTuple
-forcing_combined = (; Dict(:T => T_forcing)..., Dict(:n1 => n1_forcing)..., forcing_dict..., Dict(Symbol("n$numSizeClasses") => nend_forcing)...)
+forcing_combined = (; Dict(:n1 => n1_forcing)..., forcing_dict..., Dict(Symbol("n$numSizeClasses") => nend_forcing)...)
 
 ######################### setup model ########################################
 
@@ -538,7 +532,7 @@ ninitial_dict = Dict(Symbol("n$n") => nᵢₙ[n] for n in 1:numSizeClasses)
 ninitial = (; ninitial_dict...)
 
 # set the initial conditions
-Tᵢ = Tf - Tdiff #* Ξₜ(z)
+Tᵢ = Tf - 1e-4 #* Ξₜ(z)
 #set!(model, u=0, v=0, w=0, T=Tᵢ, n1 = nᵢₙ[1], n2 = nᵢₙ[2], n3 = nᵢₙ[3], n4 = nᵢₙ[4], n5 = nᵢₙ[5], n6 = nᵢₙ[6], n7 = nᵢₙ[7], n8 = nᵢₙ[8], n9 = nᵢₙ[9], n10 = nᵢₙ[10], S=34.5)
 # Set initial conditions using `set!`
 set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
@@ -548,6 +542,40 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 simulation = Simulation(model, Δt=1.0, stop_time=0.5hours)
 
 # Define the enforce_nonnegative_tracer function
+function enforce_nonnegative_tracer_old(simulation)
+    n1_data = simulation.model.tracers.n1.data
+    @inbounds n1_data .= max.(n1_data, 0)
+
+    n2_data = simulation.model.tracers.n2.data
+    @inbounds n2_data .= max.(n2_data, 0)
+
+    n3_data = simulation.model.tracers.n3.data
+    @inbounds n3_data .= max.(n3_data, 0)
+
+    n4_data = simulation.model.tracers.n4.data
+    @inbounds n4_data .= max.(n4_data, 0)
+
+    n5_data = simulation.model.tracers.n5.data
+    @inbounds n5_data .= max.(n5_data, 0)
+
+    n6_data = simulation.model.tracers.n6.data
+    @inbounds n6_data .= max.(n6_data, 0)
+
+    n7_data = simulation.model.tracers.n7.data
+    @inbounds n7_data .= max.(n7_data, 0)
+
+    n8_data = simulation.model.tracers.n8.data
+    @inbounds n8_data .= max.(n8_data, 0)
+
+    n9_data = simulation.model.tracers.n9.data
+    @inbounds n9_data .= max.(n9_data, 0)
+
+    n10_data = simulation.model.tracers.n10.data
+    @inbounds n10_data .= max.(n10_data, 0)
+
+    return nothing
+end
+
 function enforce_nonnegative_tracer(simulation)
     for n in 1:numSizeClasses
         tracer_data = getproperty(simulation.model.tracers, Symbol("n$n")).data
@@ -560,10 +588,12 @@ end
 grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 
 # Add the callback to enforce non-negativity
-add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
+#add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(20))
 
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute)#0.01minute)
+
+#simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
 output_interval = 0.1minutes
 
@@ -581,4 +611,4 @@ S = model.tracers.S
 
 run!(simulation)
 #end
-#endh
+#end
