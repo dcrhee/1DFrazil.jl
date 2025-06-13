@@ -47,9 +47,10 @@ Vs = π * Rs.^2 .* Hs
 V₁ = Vs[1]
 Vₙ = Vs[end]
 
-ϵ = 1e-2#7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-8#7.4 * 1e-6 #10^-3 # m²s⁻³
 ν = 1.95 * 1e-6
-Cᵢₙ =  4 * 1e-8
+Cᵢₙ =  4 * 1e-8 # initialise with the same total number
+Cᵢₙ =  0.001632178703736923 # initialise with the same total concentration sum(nᵢₙ .* Vs) and use nin from model
 nmax = 10^20
 ζ = 1 # number of new crystals formed per collision
 
@@ -66,16 +67,16 @@ const effective_areas = find_mean_collision_radius(Rs, aspect_ratio)
 
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
-cvelnum = 3 # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
-pnum = 2 # 1 is mean n, 2 is sum over nj
+cvelnum = 1 # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
+pnum = 1 # 1 is mean n, 2 is sum over nj
 
-end_name = "fast_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
+end_name = "sameConc_fast_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
 crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
-effective_radius = false #true # use their equivalent radius
-averaged_radius = true # use their averaged radius
+effective_radius = true # use their equivalent radius
+averaged_radius = false # use their averaged radius
 
 if collision_velocity_parameterisation_num == 2
     end_name = end_name * "_new_cyl"
@@ -246,8 +247,11 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 
 ########################## run model #######################################
 
-simulation = Simulation(model, Δt=1.0, stop_time=800000minutes)
-#simulation = Simulation(model, Δt=1.0, stop_time=4000minutes) not long enough for epsilon 1e-2 sum nj
+# if initialise with the same n
+#simulation = Simulation(model, Δt=1.0, stop_time=100000minutes)
+
+# if initialise with the same C
+simulation = Simulation(model, Δt=1.0, stop_time=3000minutes)
 
 # Create the simulation
 grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
@@ -256,15 +260,14 @@ grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(1))
 
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=24hours) # for n = 1, p = 2
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=24hours) # for n = 1, p = 2
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute) # for n = 1, p = 2
 
-# epsilon 1e-8, n = 1, p  = 1 needed 100 days max Δt 24 hours (actually less than this but I did this to be safe)
-# epsilon 1e-2, n = 1, p  = 1 needed 40 days max Δt 24 hours (actually less than this but I did this to be safe)
-# epsilon 1e-8, n = 1, p  = 2 needed >555 days max Δt 24 hours
 
 #simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
-output_interval = 24hours
+#output_interval = 24hours
+output_interval = 1minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 

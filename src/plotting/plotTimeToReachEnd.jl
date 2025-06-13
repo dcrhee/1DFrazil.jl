@@ -15,15 +15,29 @@ using .plottingFunctions
 
 colours = cmap("CBTL1", N=4) 
 
-fig = Figure(size = (1350, 850))
-ax = Axis(fig[1, 1]; xscale=log10, xlabel = "ϵ", ylabel = "t(s)")
+fig = Figure(size = (850, 600))
+ax = Axis(fig[1, 1]; xscale=log10, xlabel = "ϵ (m²s⁻³)", ylabel = "t (s)")
 
-fig2 = Figure(size = (1350, 850))
-ax2 = Axis(fig2[1, 1]; xscale=log10, xlabel = "ϵ", ylabel = "r̅(mm)")
+fig2 = Figure(size = (850, 600))
+ax2 = Axis(fig2[1, 1]; xscale=log10, xlabel = "ϵ (m²s⁻³)", ylabel = "r̅ (mm)")
 
-fig3 = Figure(size = (1350, 850))
-ax3 = Axis(fig3[1, 1]; xscale=log10, xlabel = "ϵ", ylabel = "n1")
+fig3 = Figure(size = (850, 600))
+ax3 = Axis(fig3[1, 1]; xscale=log10, xlabel = "ϵ (m²s⁻³)", ylabel = "n1")
 
+fig = Figure(size = (850, 600))
+ax = Axis(fig[1, 1]; xscale=log10, xlabel = "ϵ (m²s⁻³)", ylabel = "t (s)")
+ax2 = Axis(fig[1, 2]; xscale=log10, xlabel = "ϵ (m²s⁻³)", ylabel = "r̅ (mm)")
+
+
+msize = 10
+
+p1c1_times = []
+p1c1_epsilon = []
+p1c1_rad = []
+
+p2c3_times = []
+p2c3_epsilon = []
+p2c3_rad = []
 
 for ϵ = [1e-2, 1e-3, 1e-4, 1e-5, 1e-8]
 
@@ -32,11 +46,12 @@ Rs = range(0.01, 2, numSizeClasses) .* 1e-3
 aspect_ratio = 50
 Volume = 1
 
-for crystal_size_collision_redistribution = [1, 2]
+for crystal_size_collision_redistribution = [1]#[1, 2]
 for cvelnum = [1, 2, 3]
 for pnum = [1, 2]
     end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
     new_label = ""
+    label_str = ""
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
@@ -48,11 +63,15 @@ if collision_velocity_parameterisation_num == 2
     new_label = "new cylinder"
 elseif collision_velocity_parameterisation_num == 3
     end_name = end_name * "_new_spherical"
-        new_label = "new spherical"
+    new_label = "new spherical"
+else
+    new_label = "old cylinder"
 end
 if concentration_parameterisation_num == 2
     end_name = end_name * "_sum_nj"
-    new_label = new_label * ", sum nj"
+    new_label = new_label * ", differential crystal size"
+else
+    new_label = new_label * ", point-like"
 end
 if crystal_size_collision_redistribution == 2
     end_name = end_name * "_redistribute"
@@ -65,29 +84,69 @@ try
     @load end_name * "timeAndNs.jld2" timeAndNs
     meanrad2 = sum(Rs[2:end] .* timeAndNs[2:end-1])/sum(timeAndNs[2:end-1]) # mean radius from 2 upwards
 
-    scatter!(ax3, ϵ, timeAndNs[1], color = colours[pnum])
-    
-    if crystal_size_collision_redistribution == 2
+    if pnum == 1
         if cvelnum == 1
-            scatter!(ax, ϵ, timeAndNs[end], color = colours[3])
-            scatter!(ax2, ϵ, meanrad2, color = colours[3])
-        elseif cvelnum == 2
-            scatter!(ax, ϵ, timeAndNs[end], marker = :rect, color = colours[3])
-            scatter!(ax2, ϵ, meanrad2, marker = :rect, color = colours[3])
-        else
-            scatter!(ax, ϵ, timeAndNs[end], marker = :star5, color = colours[3])
-            scatter!(ax2, ϵ, meanrad2, marker = :star5, color = colours[3])
+            push!(p1c1_times, timeAndNs[end])
+            push!(p1c1_epsilon, ϵ)
+            push!(p1c1_rad, meanrad2)
         end
     else
-        if cvelnum == 1
-            scatter!(ax, ϵ, timeAndNs[end], color = colours[pnum])
-            scatter!(ax2, ϵ, meanrad2, color = colours[pnum])
-        elseif cvelnum == 2
-            scatter!(ax, ϵ, timeAndNs[end], marker = :rect, color = colours[pnum])
-            scatter!(ax2, ϵ, meanrad2, marker = :rect, color = colours[pnum])
+        if cvelnum == 3
+            push!(p2c3_times, timeAndNs[end])
+            push!(p2c3_epsilon, ϵ)
+            push!(p2c3_rad, meanrad2)
+        end
+
+    end
+    
+    scatter!(ax3, ϵ, timeAndNs[1], color = colours[pnum])
+    if ϵ == 0.01
+        if crystal_size_collision_redistribution == 2
+            if cvelnum == 1
+                scatter!(ax, ϵ, timeAndNs[end], marker = :diamond, color = colours[pnum], markersize = msize, label = new_label)
+                scatter!(ax2, ϵ, meanrad2, marker = :diamond, color = colours[pnum], markersize = msize, label = new_label)
+            elseif cvelnum == 2
+                scatter!(ax, ϵ, timeAndNs[end], marker = :star8, color = colours[pnum], markersize = msize, label = new_label)
+                scatter!(ax2, ϵ, meanrad2, marker = :star8, color = colours[pnum], markersize = msize, label = new_label)
+            else
+                scatter!(ax, ϵ, timeAndNs[end], marker = :xcross, color = colours[pnum], markersize = msize, label = new_label)
+                scatter!(ax2, ϵ, meanrad2, marker = :xcross, color = colours[pnum], markersize = msize, label = new_label)
+            end
         else
-            scatter!(ax, ϵ, timeAndNs[end], marker = :star5, color = colours[pnum])
-            scatter!(ax2, ϵ, meanrad2, marker = :star5, color = colours[pnum])
+            if cvelnum == 1
+                scatter!(ax, ϵ, timeAndNs[end], color = colours[pnum], marker = :rect, markersize = msize, label = new_label)
+                scatter!(ax2, ϵ, meanrad2, color = colours[pnum], marker = :rect, markersize = msize, label = new_label)
+            elseif cvelnum == 2
+                scatter!(ax, ϵ, timeAndNs[end], marker = :circle, color = colours[pnum], markersize = msize, label = new_label)
+                scatter!(ax2, ϵ, meanrad2, marker = :circle, color = colours[pnum], markersize = msize, label = new_label)
+            else
+                scatter!(ax, ϵ, timeAndNs[end], marker = :cross, color = colours[pnum], markersize = msize, label = new_label)
+                scatter!(ax2, ϵ, meanrad2, marker = :cross, color = colours[pnum], markersize = msize, label = new_label)
+            end
+        end
+    else
+        if crystal_size_collision_redistribution == 2
+            if cvelnum == 1
+                scatter!(ax, ϵ, timeAndNs[end], marker = :diamond, color = colours[pnum], markersize = msize)
+                scatter!(ax2, ϵ, meanrad2, marker = :diamond, color = colours[pnum], markersize = msize)
+            elseif cvelnum == 2
+                scatter!(ax, ϵ, timeAndNs[end], marker = :star8, color = colours[pnum], markersize = msize)
+                scatter!(ax2, ϵ, meanrad2, marker = :star8, color = colours[pnum], markersize = msize)
+            else
+                scatter!(ax, ϵ, timeAndNs[end], marker = :xcross, color = colours[pnum], markersize = msize)
+                scatter!(ax2, ϵ, meanrad2, marker = :xcross, color = colours[pnum], markersize = msize)
+            end
+        else
+            if cvelnum == 1
+                scatter!(ax, ϵ, timeAndNs[end], color = colours[pnum], marker = :rect, markersize = msize)
+                scatter!(ax2, ϵ, meanrad2, color = colours[pnum], marker = :rect, markersize = msize)
+            elseif cvelnum == 2
+                scatter!(ax, ϵ, timeAndNs[end], marker = :circle, color = colours[pnum], markersize = msize)
+                scatter!(ax2, ϵ, meanrad2, marker = :circle, color = colours[pnum], markersize = msize)
+            else
+                scatter!(ax, ϵ, timeAndNs[end], marker = :cross, color = colours[pnum], markersize = msize)
+                scatter!(ax2, ϵ, meanrad2, marker = :cross, color = colours[pnum], markersize = msize)
+            end
         end
     end
 
@@ -98,13 +157,23 @@ end
 end
 end
 end
+lines!(ax, p1c1_epsilon, p1c1_times, color = colours[1])
+lines!(ax, p2c3_epsilon, p2c3_times, color = colours[2])
+
+lines!(ax2, p1c1_epsilon, p1c1_rad, color = colours[1])
+lines!(ax2, p2c3_epsilon, p2c3_rad, color = colours[2])
+
+axislegend(ax, position=(:left, :bottom), framevisible = false)
+#axislegend(ax2, position=(:left, :bottom), framevisible = false)
 
 display(fig)
 display(fig2)
 display(fig3)
-save("times.png", fig)
-save("meanrad.png", fig2)
-save("n1.png", fig3)
+save("times.pdf", fig)
+save("meanrad.pdf", fig2)
+save("n1.pdf", fig3)
+
+save("times_meanrad.pdf", fig)
 
 for ϵ = [1e-2]#[1e-2, 1e-3, 1e-4, 1e-5, 1e-8]
 
@@ -113,7 +182,7 @@ Rs = range(0.01, 2, numSizeClasses) .* 1e-3
 aspect_ratio = 50
 Volume = 1
 
-for cvelnum = [3]#[1, 2, 3]
+for cvelnum = [2]#[1, 2, 3]
 for pnum = [2]#[1, 2]
 
 

@@ -17,9 +17,9 @@ function progress(simulation)
     n8 = simulation.model.tracers.n8
     n9 = simulation.model.tracers.n9
     n10 = simulation.model.tracers.n10
-    n50 = simulation.model.tracers.n10#n50 
-    n100 = simulation.model.tracers.n10#0
-    n200 = simulation.model.tracers.n10#n200
+    n50 = simulation.model.tracers.n50 
+    n100 = simulation.model.tracers.n100
+    n200 = simulation.model.tracers.n200
 
     # Print a progress message
     #msg = @sprintf("i: %04d, t: %s, Δt: %s, umax = (%.1e, %.1e, %.1e) ms⁻¹, wall time: %s\n",

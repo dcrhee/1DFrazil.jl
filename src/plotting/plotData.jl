@@ -29,12 +29,20 @@ colours = cmap("CBTL1", N = Int(1.2*length(Rs)))
 #ts1_times = ts1.w.times
 #ts2_times = ts1_times[end] .+ ts2.w.times
 #ts3_times = ts2_times[end] .+ ts3.w.times
+ts_1 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200.jld2", numSizeClasses)
+#ts_1 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200.jld2", numSizeClasses)
+#ts_1 = load_plot_data("1D_fieldsfast_same_C_just_collisions_epsilon1.0e-8_200.jld2", numSizeClasses)
+ts1_times = ts_1.w.times
 
-#tssphere = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_new_spherical_sum_nj_r_av.jld2", numSizeClasses)
-#sphere_times = tssphere.w.times
+#ts_nonsum = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_sum_nj.jld2", numSizeClasses) #load_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_r_av.jld2", numSizeClasses)
 
-ts_nonsum = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_sum_nj_redistribute.jld2", numSizeClasses) #load_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_r_av.jld2", numSizeClasses)
+ts_nonsum = load_plot_data("1D_fieldssameConc_fast_same_C_just_collisions_epsilon1.0e-8_200.jld2", numSizeClasses)
+#ts_nonsum = load_plot_data("1D_fieldsfast_same_C_just_collisions_epsilon1.0e-8_200_new_spherical_sum_nj.jld2", numSizeClasses) #load_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_r_av.jld2", numSizeClasses)
+#ts_nonsum = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_new_spherical.jld2", numSizeClasses) #load_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_r_av.jld2", numSizeClasses)
 ts_nonsum_times = ts_nonsum.w.times
+
+#ts_2 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_new_spherical_sum_nj.jld2", numSizeClasses) #load_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_r_av.jld2", numSizeClasses)
+#ts_2_times = ts_2.w.times
 
 #tmax =  maximum(vcat(ts1_times, ts2_times, ts3_times))
 tmax =  maximum(ts_nonsum_times)
@@ -67,11 +75,14 @@ function plot_n_C_pdf(ls, time_series_data, times, add_nC_label, add_pdf_label, 
 
     # find the times when n2 has reduced by 1/10, 1/100, 1/1000, 1/10^4
     n1max = maximum(find_z_mean(end_time_series_data.n1))
-    
-    for (i, n1val) in enumerate(exp10.(range(start=log10(n1max/10), stop=log10(n1max/1.001), length=numpdflines)))
+    fractions = [0.1, 0.9, 0.99, 0.999]
+    #for (i, n1val) in enumerate(exp10.(range(start=log10(n1max/10), stop=log10(n1max/1.001), length=numpdflines)))
+    for (i, n1val) in enumerate(fractions*n1max)
         exp = floor(Int, log10(abs(n1val)))
         coeff = round(n1val / 10^exp, digits = 1)
-        label_str = L"n_1 = %$coeff \times 10^{%$exp}"
+        #label_str = L"n_1 = %$coeff \times 10^{%$exp}"
+        frac = fractions[i]
+        label_str = L"n_1 = %$frac n_{max}"
 
         tindx = argmin(abs.(find_z_mean(time_series_data.n1) .- n1val))
         if tindx == length(times) 
@@ -81,15 +92,19 @@ function plot_n_C_pdf(ls, time_series_data, times, add_nC_label, add_pdf_label, 
             pdfsol, barvals = generatePDF(tindx, time_series_data, Rs, numSizeClasses)
             if ls == 1
                 if add_pdf_label
-                    lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
+                    #lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
+                    lines!(ax_rn, Rs[2:end]*1000, barvals/(sum(barvals)*(Rs[1])), linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
                 else
-                    lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
+                    #lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
+                    lines!(ax_rn, Rs[2:end]*1000, barvals/(sum(barvals)*(Rs[1])), linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
                 end
             elseif ls == 2
                 if add_pdf_label
-                    lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
+                    #lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
+                    lines!(ax_rn, Rs[2:end]*1000, barvals/(sum(barvals)*(Rs[1])), linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
                 else
-                    lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
+                    #lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
+                    lines!(ax_rn, Rs[2:end]*1000, barvals/(sum(barvals)*(Rs[1])), linestyle=:dash,  color = colours[round(Int, numSizeClasses/numpdflines*i)])
                 end
             end
         end
@@ -122,21 +137,26 @@ ax_n = Axis(fig[1, 1];
 #plot_n_C_pdf(1, ts3, ts3_times, false, true, ts3)
 
 plot_n_C_pdf(1, ts_nonsum, ts_nonsum_times, true, true, ts_nonsum)
-#plot_n_C_pdf(2, tssphere, sphere_times, false, false, tssphere)
+plot_n_C_pdf(2, ts_1, ts1_times, false, false, ts_1)
+
+#plot_n_C_pdf(2, ts_nonsum, ts_nonsum_times, false, false, ts_nonsum)
+#plot_n_C_pdf(1, ts_2, ts_2_times, true, true, ts_1)
 
 
-
-axislegend(ax_rn, position=(:left, :top))
+axislegend(ax_rn, position=(:right, :bottom), framevisible = false)
+#axislegend(ax_rn, position=(:left, :top), framevisible = false)
 #axislegend(ax_C)
-axislegend(ax_n)
+axislegend(ax_n, framevisible = false)
 
 
 fig
 
-#save(end_name * "_4_compare_zoom_max.png", fig)
-#save("r_rav_eps1e-8.png", fig)
-#save("compare_rsum_rav_eps1e-8.png", fig)
-#save(end_name * "_compare_nomax_3ontop.eps", fig)
+#save("dot_interact_eps0.01_c13.pdf", fig)
+#save("dot_interact_eps0.01_c3.pdf", fig)
+#save("dot_interact_eps0.01_c1.pdf", fig)
+#save("dot_eps0.01_c13.pdf", fig)
+#save("Cdot_interact_eps1e-8.pdf", fig)
+save("Cndot_eps1e-8.pdf", fig)
 
 #Vs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 1e-9
 #Rs = ( (Vs * aspect_ratio) / (2 * π) ) .^(1/3) 
