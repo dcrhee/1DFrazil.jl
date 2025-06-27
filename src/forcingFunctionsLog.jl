@@ -1,4 +1,4 @@
-module forcingFunctions
+module forcingFunctionsLog
 
 export nend_forcing_func, nintermediate_forcing_func, n1_forcing_func
 
@@ -60,37 +60,28 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     # get collision frquency
     Fenc = Main.coll_freq_concentration_parameterisation(model_fields, indx)
     Fcoll = Fenc .* nᵢ
-    #if Main.crystal_size_collision_redistribution == 1
-    #    Fenc = Main.coll_freq_concentration_parameterisation(model_fields, indx)
-    #    Fcoll = Fenc .* nᵢ
-    #else
-    #    if Main.αs[indx] == 0
-    #        Fcoll = zeros(1, 1, Main.numz)
-    #    else
-    #        Fenc = Main.coll_freq_concentration_parameterisation(model_fields, indx)
-    #        Fcoll = Fenc .* nᵢ
-    #    end
-    #end
 
     # find Fcollᵦ
     if Main.crystal_size_collision_redistribution == 2
-        β = Main.βs[indx]
-        if β == 0
-            Fcollᵦ = zeros(1, 1, Main.numz)
-        else
+        βlist = Main.βs[indx]
+        βVolconsts = Main.βVolconst[indx]
+        Fcollβsum =  zeros(1, 1, Main.numz)
+        for βindx in eachindex(βlist)
+            β = βlist[βindx]
             nᵦ = getfield(model_fields, Symbol("n$β"))  # Dynamically get field `nᵢ`
             Fencᵦ = Main.coll_freq_concentration_parameterisation(model_fields, β)
             Fcollᵦ = Fencᵦ .* nᵦ
+            Fcollβsum = Fcollβsum .+ βVolconsts[βindx] * Fcollᵦ
         end
     end
-    
+
 
 
     # crystal size redistribution
     if Main.crystal_size_collision_redistribution == 1
         dn_coll = - Main.V₁/Vᵢ * Fcoll/Main.volume
     else
-        dn_coll = (Main.αVolconst[indx] * Fcoll .+ Main.βVolconst[indx] * Fcollᵦ) / Main.volume
+        dn_coll = (Main.αVolconst[indx] * Fcoll .+ Fcollβsum) / Main.volume
     end
     #print("n2", maximum(dn_coll))
 
@@ -132,17 +123,20 @@ function n1_forcing_func(i, j, k, grid, clock, model_fields, indx)
     else
          # find Fcollᵦ
         if Main.crystal_size_collision_redistribution == 2
-            β = Main.βs[indx]
-            if β == 0
-                Fcollᵦ == zeros(1, 1, Main.numz)
-            else
+            βlist = Main.βs[indx]
+            βVolconsts = Main.βVolconst[indx]
+            Fcollβsum =  zeros(1, 1, Main.numz)
+            for βindx in eachindex(βlist)
+                β = βlist[βindx]
                 nᵦ = getfield(model_fields, Symbol("n$β"))  # Dynamically get field `nᵢ`
                 Fencᵦ = Main.coll_freq_concentration_parameterisation(model_fields, β)
                 Fcollᵦ = Fencᵦ .* nᵦ
+                Fcollβsum = Fcollβsum .+ βVolconsts[βindx] * Fcollᵦ
             end
         end
-        dn_coll = (Main.ζ * Fcollsum .+ Main.βVolconst[indx] * Fcollᵦ) / Main.volume
+        dn_coll = (Main.ζ * Fcollsum .+ Fcollβsum) / Main.volume
     end
+
     #print("n1", maximum(dn_coll))
 
     #if G₁[i, j, k] > 0 # growth

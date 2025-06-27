@@ -30,9 +30,10 @@ file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full
 collision_efficiency = read(file, "collisionEfficiencyScatteredInterpolate")  # read a specific variable from the file
 close(file)
 
-file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/cylinder_ballistic/radiimatd50.mat")  # open the .mat file
+file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/cylinder_ballistic/logradiimatd50.mat")  # open the .mat file
 radii_efficiency = read(file, "radiimat")  # read a specific variable from the file
 close(file)
+
 
 # setup grid: choose 128 data points
 depth = 0.20
@@ -44,6 +45,7 @@ numSizeClasses = 200
 # choose radius intervals
 aspect_ratio = 50
 Rs = range(0.01, 2, numSizeClasses) .* 1e-3
+Rs = exp.(range(start=log(0.01*0.001), stop=log(0.002), length=numSizeClasses))
 
 Hs = 2*Rs/aspect_ratio
 Vs = π * Rs.^2 .* Hs
@@ -51,7 +53,7 @@ Vs = π * Rs.^2 .* Hs
 V₁ = Vs[1]
 Vₙ = Vs[end]
 
-ϵ = 1e-4#7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-8#7.4 * 1e-6 #10^-3 # m²s⁻³
 ν = 1.95 * 1e-6
 Cᵢₙ =  4 * 1e-8 # initialise with the same total number
 Cᵢₙ =  0.001632178703736923 # initialise with the same total concentration sum(nᵢₙ .* Vs) and use nin from model
@@ -61,26 +63,28 @@ nmax = 10^20
 # work out the indices of the class to count crystal collisions from
 Vrem = ζ * V₁
 
-αs, βs, αVolconst, βVolconst  = find_β_α_Vol_constants(Vs, Vrem, V₁, ζ)
+#αs, βs, αVolconst, βVolconst  = find_β_α_Vol_constants(Vs, Vrem, V₁, ζ)
+αs, βs, αVolconst, βVolconst  = find_β_α_Vol_constants_log(Vs, Vrem, V₁, ζ)
 const effective_areas = find_mean_collision_radius(Rs, aspect_ratio)
 #collision_efficiency = find_collision_efficiency(Rs)
 #vgs = find_steady_velocity_via_iteration(Rs, ν, ρₒ, ρᵢ, grav, aspect_ratio)
 
-#@save "vgs200.jld2" vgs  # Saves variable `vgs`
-@load "vgs200.jld2" vgs  # Loads it back
+#@save "vgs200log.jld2" vgs  # Saves variable `vgs`
+@load "vgs200log.jld2" vgs  # Loads it back
 
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
 cvelnum = 1 # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 pnum = 1 # 1 is mean n, 2 is sum over nj
 
-end_name = "sameConc_fast_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
+end_name = "log_space_sameConc_fast_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
-crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
-efficiency_radius = true # use their equivalent radius
-max_radius = false # use their averaged radius
+crystal_size_collision_redistribution = 2 # 1 is old redistribution, 2 is new redistribution
+effective_radius = false # use their equivalent radius
+efficiency_radius = true # use their averaged radius
+max_radius = false
 
 if collision_velocity_parameterisation_num == 2
     end_name = end_name * "_new_cyl"
@@ -93,12 +97,11 @@ end
 if efficiency_radius
     end_name = end_name * "_r_av"
 end
-if max_radius
-    end_name = end_name * "_r_max"
-end
-
 if crystal_size_collision_redistribution == 2
     end_name = end_name * "_redistribute"
+end
+if max_radius
+    end_name = end_name * "_r_max"
 end
 
 # setup model 
@@ -212,8 +215,11 @@ else
 end
 
 ################################ define forcing functions ###########################################
-include("forcingFunctions.jl")
-using .forcingFunctions
+#include("forcingFunctions.jl")
+#using .forcingFunctions
+
+include("forcingFunctionsLog.jl")
+using .forcingFunctionsLog
 
 # Define the range of tracers (e.g., n2 to n100)
 n_range_forcing = 2:numSizeClasses-1
@@ -259,8 +265,7 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 #simulation = Simulation(model, Δt=1.0, stop_time=100000minutes)
 
 # if initialise with the same C
-simulation = Simulation(model, Δt=1.0, stop_time=20minutes)
-#simulation = Simulation(model, Δt=1.0, stop_time=15minutes)
+simulation = Simulation(model, Δt=1.0, stop_time=30minutes)
 #simulation = Simulation(model, Δt=1.0, stop_time=10minutes)
 
 # Create the simulation
@@ -272,15 +277,14 @@ add_callback!(simulation, progress, IterationInterval(1))
 
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=24hours) # for n = 1, p = 2
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.1minute) # for n = 1, p = 2
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.02minute) # for n = 1, p = 2
 
-#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute) # for n = 1, p = 2
 
 #simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
 #output_interval = 24hours
-#output_interval = 0.1minutes
-output_interval = 0.01minutes
+output_interval = 0.1minutes
+#output_interval = 0.02minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 

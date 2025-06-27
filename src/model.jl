@@ -30,6 +30,10 @@ file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full
 collision_efficiency = read(file, "collisionEfficiencyScatteredInterpolate")  # read a specific variable from the file
 close(file)
 
+file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/cylinder_ballistic/radiimatd50.mat")  # open the .mat file
+radii_efficiency = read(file, "radiimat")  # read a specific variable from the file
+close(file)
+
 # setup grid: choose 128 data points
 depth = 0.20
 numz = 1 #128
@@ -51,7 +55,7 @@ Vs = π * Rs.^2 .* Hs
 V₁ = Vs[1]
 Vₙ = Vs[end]
 
-ϵ = 1e-2#7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-8#7.4 * 1e-6 #10^-3 # m²s⁻³
 ν = 1.95 * 1e-6
 Cᵢₙ =  4 * 1e-8
 nmax = 10^20
@@ -71,16 +75,16 @@ const effective_areas = find_mean_collision_radius(Rs, aspect_ratio)
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
 cvelnum = 1 # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
-pnum = 2 # 1 is mean n, 2 is sum over nj
+pnum = 1 # 1 is mean n, 2 is sum over nj
 
 end_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
-crystal_size_collision_redistribution = 2 # 1 is old redistribution, 2 is new redistribution
-effective_radius = true # use their equivalent radius
-averaged_radius = false # use their averaged radius
-max_radius = false #true
+crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
+effective_radius = false # use their equivalent radius
+efficiency_radius = true #true # use their averaged radius
+max_radius = false
 
 if collision_velocity_parameterisation_num == 2
     end_name = end_name * "_new_cyl"
@@ -90,7 +94,7 @@ end
 if concentration_parameterisation_num == 2
     end_name = end_name * "_sum_nj"
 end
-if averaged_radius
+if efficiency_radius
     end_name = end_name * "_r_av"
 end
 if max_radius
@@ -114,14 +118,14 @@ if effective_radius
         get_vₜ = get_vₜ_effective_radius_collision_velocity_parameterisation_num_13
         get_vₜ_same_radius = get_vₜ_same_radius_effective_radius_collision_velocity_parameterisation_num_13
     end
-elseif averaged_radius
-    if collision_velocity_parameterisation_num == 2 # 2 is new cylinder
-        get_vₜ = get_vₜ_averaged_radius_collision_velocity_parameterisation_num_2
-        get_vₜ_same_radius = get_vₜ_same_radius_averaged_radius_collision_velocity_parameterisation_num_2
-    else # 1 is old cylinder, 3 is new spherical
-        get_vₜ = get_vₜ_averaged_radius_collision_velocity_parameterisation_num_13
-        get_vₜ_same_radius = get_vₜ_same_radius_averaged_radius_collision_velocity_parameterisation_num_13
-    end
+#elseif efficiency_radius
+#    if collision_velocity_parameterisation_num == 2 # 2 is new cylinder
+#        get_vₜ = get_vₜ_averaged_radius_collision_velocity_parameterisation_num_2
+#        get_vₜ_same_radius = get_vₜ_same_radius_averaged_radius_collision_velocity_parameterisation_num_2
+#    else # 1 is old cylinder, 3 is new spherical
+#        get_vₜ = get_vₜ_averaged_radius_collision_velocity_parameterisation_num_13
+#        get_vₜ_same_radius = get_vₜ_same_radius_averaged_radius_collision_velocity_parameterisation_num_13
+#    end
 else
     if collision_velocity_parameterisation_num == 2 # 2 is new cylinder
         get_vₜ = get_vₜ_collision_velocity_parameterisation_num_2
@@ -167,7 +171,7 @@ if effective_radius
         get_Fenc = get_Fenc_effective_radius_collision_velocity_parameterisation_num_12
         get_Fenc_ndensity = get_Fenc_p1_effective_radius_collision_velocity_parameterisation_num_12
     end
-elseif averaged_radius
+elseif efficiency_radius
     if collision_velocity_parameterisation_num == 3 # 3 is new spherical
         get_Fenc = get_Fenc_average_radius_collision_velocity_parameterisation_num_3
         get_Fenc_ndensity = get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_3
@@ -257,8 +261,8 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 ########################## run model #######################################
 
 #simulation = Simulation(model, Δt=1.0, stop_time=8000minutes)
-simulation = Simulation(model, Δt=1.0, stop_time=30minutes)
-#simulation = Simulation(model, Δt=1.0, stop_time=10minutes)
+#simulation = Simulation(model, Δt=1.0, stop_time=30minutes)
+simulation = Simulation(model, Δt=1.0, stop_time=4minutes)
 #simulation = Simulation(model, Δt=1.0, stop_time=4000minutes) not long enough for epsilon 1e-2 sum nj
 
 # Create the simulation
@@ -271,16 +275,16 @@ add_callback!(simulation, progress, IterationInterval(1))
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.000001minute) # for n = 1, p = 1, eps = 1e-2
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.00001minute) # for n = 1, p = 2, eps = 1e-2
 
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.1minute) # for n = 1, p = 2
 
-#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2 for n sum
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2 for n sum
 
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.02minute) # for n = 1, p = 2
 
 #simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
-output_interval = 0.02minutes
+output_interval = 0.001minutes
 
 #output_interval = 0.1minutes
 

@@ -37,6 +37,7 @@ function coll_freq_concentration_parameterisation_num_1(model_fields, indx)
     end
     ntot = min.(nTotal, Main.nmax)
     Fcoll = Main.encounterFrequencyConstants_matrix[indx]*ntot
+    #println(", n = ", indx, ntot)
     #Fcoll = Main.get_Fenc_ndensity(indx, ntot) #* get_Fefficiency_nsum(indx)
 
     return Fcoll

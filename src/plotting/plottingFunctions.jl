@@ -1,6 +1,6 @@
 module plottingFunctions
 
-export find_z_mean, find_C_const, generatePDF
+export find_z_mean, find_C_const, generatePDF, generateCPDF
 
 using Statistics
 using Oceananigans
@@ -22,16 +22,38 @@ function generatePDF(tindx, chosentimeseries, Rs, numSizeClasses)
     expanded_data = Vector{Float64}()  # Pre-allocate an empty vector
     barvals = zeros(length(Rs)-1)
     for i in 2:numSizeClasses
+        
         nivals = find_z_mean(getfield(chosentimeseries, Symbol("n$i")))  # Extract tracer values
-        append!(expanded_data, Rs[i] * ones(round(Int, nivals[tindx])))
+        println(i, nivals[tindx])
+        append!(expanded_data, Rs[i] * nivals[tindx])#ones(round(Int, nivals[tindx])))
         barvals[i-1] = nivals[tindx]
     end
         
     # Perform Kernel Density Estimation of everything apart from size class 1
-    pdfsol = kde(expanded_data)
+    #pdfsol = kde(expanded_data)
     #pdfsol = kde((Rs[2:end], barvals))
 
-    return pdfsol, barvals
+    return barvals
+end
+
+# generate pdf
+function generateCPDF(tindx, chosentimeseries, Rs, numSizeClasses)
+    # input: tindx = time
+    #expanded_data = Vector{Float64}()  # Pre-allocate an empty vector
+    barvals = zeros(length(Rs)-1)
+    for i in 2:numSizeClasses
+        
+        nivals = find_z_mean(getfield(chosentimeseries, Symbol("n$i")))  # Extract tracer values
+        println(i, nivals[tindx])
+        #append!(expanded_data, Rs[i] * nivals[tindx])#ones(round(Int, nivals[tindx])))
+        barvals[i-1] = nivals[tindx] * 2*π*Rs[i]^3/(Main.aspect_ratio)
+    end
+        
+    # Perform Kernel Density Estimation of everything apart from size class 1
+    #pdfsol = kde(expanded_data)
+    #pdfsol = kde((Rs[2:end], barvals))
+
+    return barvals
 end
 
 end

@@ -28,32 +28,33 @@ ns_for_color = [1, 27, 62, 88, 148, 174, 200]
 numpdflines = 4
 colours = cmap("CBTL1", N = Int(1.2*length(Rs))) 
 
-#ts1 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_sum_nj_r_av.jld2", 200)
-#ts2 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_sum_nj_r_av_v2.jld2", 200)
-#ts3 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_sum_nj_r_av_v3.jld2", 200)
-
-
-#ts1_times = ts1.w.times
-#ts2_times = ts1_times[end] .+ ts2.w.times
-#ts3_times = ts2_times[end] .+ ts3.w.times
-#ts_1 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200.jld2", numSizeClasses)
-ts_1 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200.jld2", numSizeClasses)
 #ts_1 = load_plot_data("1D_fieldslog_space_sameConc_fast_same_C_just_collisions_epsilon0.01_200.jld2", numSizeClasses)
+ts_1 = load_plot_data("1D_fieldssameConc_fast_same_C_just_collisions_epsilon0.01_200.jld2", numSizeClasses)
+
 #ts_1 = load_plot_data("1D_fieldslog_space_sameConc_fast_same_C_just_collisions_epsilon1.0e-8_200.jld2", numSizeClasses)
+#ts_1 = load_plot_data("1D_fieldssameConc_fast_same_C_just_collisions_epsilon1.0e-8_200.jld2", numSizeClasses)
 ts1_times = ts_1.w.times
 
 #ts_nonsum = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_sum_nj.jld2", numSizeClasses) #load_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_r_av.jld2", numSizeClasses)
 
-#ts_nonsum = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_sum_nj.jld2", numSizeClasses)
-ts_nonsum = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_sum_nj.jld2", numSizeClasses)
-#ts_nonsum = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_new_spherical.jld2", numSizeClasses) 
+#ts_nonsum = load_plot_data("1D_fieldslog_space_sameConc_fast_same_C_just_collisions_epsilon0.01_200_new_spherical_sum_nj.jld2", numSizeClasses)
+#ts_nonsum = load_plot_data("1D_fieldslog_space_sameConc_fast_same_C_just_collisions_epsilon0.01_200_sum_nj.jld2", numSizeClasses)
+#ts_nonsum = load_plot_data("1D_fieldslog_space_sameConc_fast_same_C_just_collisions_epsilon1.0e-8_200_new_spherical_sum_nj.jld2", numSizeClasses)
+
+
+ts_nonsum = load_plot_data("1D_fieldssameConc_fast_same_C_just_collisions_epsilon0.01_200_new_spherical_sum_nj.jld2", numSizeClasses)
+#ts_nonsum = load_plot_data("1D_fieldssameConc_fast_same_C_just_collisions_epsilon0.01_200_sum_nj.jld2", numSizeClasses)
+#ts_nonsum = load_plot_data("1D_fieldssameConc_fast_same_C_just_collisions_epsilon1.0e-8_200_new_spherical_sum_nj.jld2", numSizeClasses)
 ts_nonsum_times = ts_nonsum.w.times
 
 #ts_2 = load_plot_data("1D_fieldsfast_same_n_just_collisions_epsilon0.01_200_new_spherical_sum_nj.jld2", numSizeClasses) #load_data("1D_fieldsfast_same_n_just_collisions_epsilon1.0e-8_200_r_av.jld2", numSizeClasses)
 #ts_2_times = ts_2.w.times
 
+tmax =  900 # for 0.01
+#tmax =  900 # for 1e-8
+
 #tmax =  maximum(vcat(ts1_times, ts2_times, ts3_times))
-tmax =  600#maximum(ts_nonsum_times)
+#tmax =  maximum(ts_nonsum_times)
 #tmax =  maximum(ts1_times)
 tmin = 0
 
@@ -101,7 +102,7 @@ function plot_n_C_pdf(ls, time_series_data, times, add_nC_label, add_pdf_label, 
         elseif tindx == 1 #change to == 1
         else
 
-            barvals = generatePDF(tindx, time_series_data, Rs, numSizeClasses)
+            barvals = generateCPDF(tindx, time_series_data, Rs, numSizeClasses)
             if ls == 1
                 if add_pdf_label
                     #lines!(ax_rn, pdfsol.x*1000, pdfsol.density, linestyle=:solid,  color = colours[round(Int, numSizeClasses/numpdflines*i)], label = label_str)
@@ -127,12 +128,13 @@ end
 fig = Figure(size = (850, 350))
 
 ax_rn = Axis(fig[1, 3];
-            ylabel ="n(r)",
+            ylabel ="C(r)",
             xlabel = "r (mm)",#)
             xgridvisible = false,
-            ygridvisible = false)
+            ygridvisible = false) #,
             #xscale = log10,
-            #yscale = log10,
+            #yscale = log10, #)
+            #limits = ((Rs[1]*1000, Rs[end]*1000), (0, 3e3)))
             #limits = ((Rs[1]*1000, Rs[end]*1000), (1e-0, 1e3)))
 
 ax_C = Axis(fig[1, 2];
@@ -173,9 +175,17 @@ fig
 
 #save("dot_interact_eps0.01_c13.pdf", fig)
 #save("dot_interact_eps0.01_c3.pdf", fig)
-save("dot_interact_eps0.01_c1.pdf", fig)
+#save("dot_interact_eps0.01_c1.pdf", fig)
+#save("dot_eps0.01_c13.pdf", fig)
 
-#save("ndot_eps1e-8.pdf", fig)
+#save("logCdot_interact_0.01_c1.pdf", fig)
+
+save("Cdot_interact_0.01_c13.pdf", fig)
+#save("Cdot_interact_0.01_c1.pdf", fig)
+#save("Cdot_interact_eps1e-8.pdf", fig)
+
+#save("logCdot_interact_0.01_c13.pdf", fig)
+#save("logCdot_interact_eps1e-8.pdf", fig)
 
 
 #Vs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] * 1e-9

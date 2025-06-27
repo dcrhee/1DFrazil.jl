@@ -1,6 +1,6 @@
 module SetupFunctions
 
-export find_mean_collision_radius, find_collision_efficiency, find_β_α_Vol_constants, find_steady_velocity_via_iteration, find_Vi
+export find_mean_collision_radius, find_collision_efficiency, find_β_α_Vol_constants, find_steady_velocity_via_iteration, find_Vi, find_β_α_Vol_constants_log
 
 # setup functions i.e. the areas and velocities
 #define a matrix which gives the effective collision area when allowing for the different orientations, call it collision radius
@@ -87,6 +87,64 @@ function find_β_α_Vol_constants(Vs, Vrem, V₁, ζ)
             βVolconst[Vindx] = ζ * V₁/(Vs[β] - Vs[Vindx])
         end
     end
+
+    return αs, βs, αVolconst, βVolconst
+end
+
+function find_β_α_Vol_constants_log(Vs, Vrem, V₁, ζ)
+    # fint the values of size class the fractures into/into which a crystal fractures and the corresponding volume distribution
+
+    # matrix of which crystal size the crystal breaks off into
+    αs = zeros(length(Vs))
+    for Vindx in eachindex(Vs)
+        Vpostcoll = Vs[Vindx] - Vrem
+        if Vpostcoll > V₁
+            αs[Vindx] = findlast(Vpostcoll .- Vs .>= 0)
+        else
+            αs[Vindx] = 1
+        end
+    end
+    αs = Int.(αs)
+
+    # matrix of which crystal breaking introduces crystals of this size
+    βs = Dict{Int, Vector{Int}}()
+    βVolconst = Dict{Int, Vector{Float64}}()
+    for Vindx in eachindex(Vs)
+        alphs_list = findall(αs .== Vindx)
+        βs[Vindx] = alphs_list
+        println(", alphs_list, ", alphs_list)
+        βVolconstlist = zeros(length(alphs_list))
+        # coefficient for crystal breaking into size class i
+        for aindx in eachindex(alphs_list)
+            
+            if Vs[Vindx] - Vrem < V₁
+                βVolconstlist[aindx] = Vs[alphs_list[aindx]]/V₁ - ζ
+                println("a, ", βVolconstlist[aindx])
+            else
+                βVolconstlist[aindx] =  ζ * V₁/(Vs[alphs_list[aindx]] - Vs[Vindx])
+                
+            end
+            
+        end
+        #try
+        #    println(", βVolconstlist, ", βVolconstlist)
+            βVolconst[Vindx] = βVolconstlist
+        #catch
+        #    βVolconst[Vindx] = [0]
+        #end
+    end
+
+    # coefficient for crystal of size class i breaking
+    αVolconst = zeros(length(Vs))
+    for Vindx in eachindex(αVolconst)
+        α = αs[Vindx]
+        if α != 1
+            αVolconst[Vindx] = -ζ * V₁/Vs[Vindx] * (1 + Vs[α]/(Vs[Vindx] - Vs[α])) 
+        else
+            αVolconst[Vindx] = -1
+        end
+    end
+    
 
     return αs, βs, αVolconst, βVolconst
 end
