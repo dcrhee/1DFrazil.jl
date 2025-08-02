@@ -20,16 +20,17 @@ numSizeClasses = 200
 plotstep = 1
 numpdflines = 4
 Rs = range(0.01, 2, numSizeClasses) .* 1e-3
+Rs = exp.(range(start=log(0.01*0.001), stop=log(0.002), length=numSizeClasses))
 depth = 1
 Tdiff = 1e-4
 
-ϵ = 1e-2
-feltham_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
+ϵ = 1e-8
+feltham_name = "log_space_sameConc_fast_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 colours = cmap("CBTL1", N = Int(1.2*length(Rs))) 
 
-cvelnum = 3
-pnum = 2
+cvelnum = 1
+pnum = 1
 
 feltham_filename = "1D_fields" * feltham_name * ".jld2"
 end_name = feltham_name
@@ -37,7 +38,7 @@ new_label = ""
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
-crystal_size_collision_redistribution = 2 # 1 is old redistribution, 2 is new redistribution
+crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
 effective_radius = true # add in their effective radius
 
 if collision_velocity_parameterisation_num == 2
@@ -83,6 +84,7 @@ nmatrix = clamp.(nmatrix, 1e-1, Inf)
 ########################## get the second array of data
 cvelnum = 3
 pnum = 2
+numSizeClasses2 = 200
 
 #feltham_name = "fast_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses) * "_efficiency_scattered_interpolation"
 
@@ -113,7 +115,7 @@ end
 
 end_filename = "1D_fields" * end_name * ".jld2"
 # Create a dictionary for n1 to n100 dynamically
-n_dict = Dict(Symbol("n$n") => FieldTimeSeries(end_filename, "n$n") for n in 1:numSizeClasses)
+n_dict = Dict(Symbol("n$n") => FieldTimeSeries(end_filename, "n$n") for n in 1:numSizeClasses2)
 # Merge with fixed fields and convert to NamedTuple
 time_series2 = (; 
     w = FieldTimeSeries(end_filename, "w"),
@@ -128,8 +130,8 @@ times2 = time_series2.w.times
 #times2 = times2/60
 #times = times/(3600*24)
 
-nmatrix2 = zeros(numSizeClasses, length(times2))
-for n in range(1, stop=numSizeClasses, step=plotstep)
+nmatrix2 = zeros(numSizeClasses2, length(times2))
+for n in range(1, stop=numSizeClasses2, step=plotstep)
     nmatrix2[n,:] = find_z_mean(getproperty(time_series2, Symbol("n$n")))
 end
 nmatrix2 = clamp.(nmatrix2, 1e-1, Inf)
@@ -137,7 +139,7 @@ nmatrix2 = clamp.(nmatrix2, 1e-1, Inf)
 
 # Set tick positions and labels for every 20 bars
 tick_pos = [1, 40, 80, 120, 160, 200]
-tick_pos = collect(range(0, stop = numSizeClasses, step = 20))
+tick_pos = collect(range(0, stop = numSizeClasses2, step = 20))
 tick_pos[1] = 1
 tick_labels = string.(round.(Rs[tick_pos]*1000, digits = 2))
 

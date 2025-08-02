@@ -23,16 +23,7 @@ using .collisionVelocity
 include("setupSimulation.jl")
 using .setupSimulation
 
-using MAT
 using JLD2
-
-#file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/Code/ODE_solve_interpolate/fall_off/arc/collisionEfficiencyScatteredInterpolate.mat")  # open the .mat file
-#collision_efficiency = read(file, "collisionEfficiencyScatteredInterpolate")  # read a specific variable from the file
-#close(file)
-
-#file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/cylinder_ballistic/radiimatd50.mat")  # open the .mat file
-#radii_efficiency = read(file, "radiimat")  # read a specific variable from the file
-#close(file)
 
 # setup grid: choose 128 data points
 depth = 0.20
@@ -48,14 +39,10 @@ Rs = range(0.01, 2, numSizeClasses) .* 1e-3
 Hs = 2*Rs/aspect_ratio
 Vs = π * Rs.^2 .* Hs
 
-#Vs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] #* 1e-9
-#Rs = ( (Vs * aspect_ratio) / (2 * π) ) .^(1/3) 
-#Hs = 2*Rs/aspect_ratio
-
 V₁ = Vs[1]
 Vₙ = Vs[end]
 
-ϵ = 1e-8 #7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-3 #7.4 * 1e-6 #10^-3 # m²s⁻³
 ν = 1.95 * 1e-6
 Cᵢₙ =  4 * 1e-8
 nmax = 10^20
@@ -66,13 +53,7 @@ Vrem = ζ * V₁
 
 αs, βs, αVolconst, βVolconst  = find_β_α_Vol_constants(Vs, Vrem, V₁, ζ)
 const effective_areas = find_mean_collision_radius(Rs, aspect_ratio)
-#collision_efficiency = find_collision_efficiency(Rs)
 
-#vgos = find_vgosink(Rs, ν, ρₒ, ρᵢ, grav, aspect_ratio)
-#vstokes = find_vstokes(Rs, ν, ρₒ, ρᵢ, grav, aspect_ratio)
-#vgs = velocity_transition(vgos, vstokes, 2*Rs .* vgos/ν)
-
-#@save "vmixed.jld2" vgs  # Saves variable `vgs`
 @load "vmixed.jld2" vgs
 
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
@@ -85,9 +66,9 @@ end_name = "new_v_same_n_just_collisions_epsilon" * string(ϵ) * "_" * string(nu
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
 crystal_size_collision_redistribution = 2 # 1 is old redistribution, 2 is new redistribution
-effective_radius = false # use their equivalent radius
+effective_radius = true # use their equivalent radius
 efficiency_radius = false #true # use their averaged radius
-max_radius = true
+max_radius = false
 
 if collision_velocity_parameterisation_num == 2
     end_name = end_name * "_new_cyl"
@@ -264,10 +245,10 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 ########################## run model #######################################
 
 #simulation = Simulation(model, Δt=1.0, stop_time=15minutes)
-#simulation = Simulation(model, Δt=1.0, stop_time=120minutes)
+simulation = Simulation(model, Δt=1.0, stop_time=120minutes)
 #simulation = Simulation(model, Δt=1.0, stop_time=4minutes)
 #simulation = Simulation(model, Δt=1.0, stop_time=10minutes)
-simulation = Simulation(model, Δt=1.0, stop_time=400minutes) #not long enough for epsilon 1e-2 sum nj
+#simulation = Simulation(model, Δt=1.0, stop_time=4000minutes) not long enough for epsilon 1e-2 sum nj
 
 # Create the simulation
 grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
@@ -276,23 +257,23 @@ grid = RectilinearGrid(size=(32, 32, 32), extent=(1, 1, 1))
 add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(1))
 
-#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2
 conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2
-#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.0001minute) # for n = 1, p = 2
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.1minute) # for n = 1, p = 2
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.02minute) # for n = 1, p = 2
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute) # for n = 1, p = 2
 
 #simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
 #output_interval = 1minutes
-output_interval = 0.01minutes
-#output_interval = 0.001minutes
+output_interval = 0.1minutes
+#output_interval = 0.02minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 
 simulation.output_writers[:fields] =
     JLD2OutputWriter(model, fields_to_output,
                     schedule = TimeInterval(output_interval),
-                    filename = "1D_fields" * end_name * ".jld2",
+                    filename = "/network/group/aopp/oceans/AW006_COTTON_1DDISKS/mixedFrazil/1D_fields" * end_name * ".jld2",
                     overwrite_existing = true)
 
 u, v, w = model.velocities
@@ -300,5 +281,3 @@ T = model.tracers.T
 S = model.tracers.S
 
 run!(simulation)
-#end
-#endPh

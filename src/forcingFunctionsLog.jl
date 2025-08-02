@@ -73,6 +73,17 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
             Fcollᵦ = Fencᵦ .* nᵦ
             Fcollβsum = Fcollβsum .+ βVolconsts[βindx] * Fcollᵦ
         end
+
+        glist = Main.gs[indx]
+        gVolconsts = Main.gVolconst[indx]
+        Fcollgsum =  zeros(1, 1, Main.numz)
+        for gindx in eachindex(glist)
+            gpos = glist[gindx]
+            nᵧ = getfield(model_fields, Symbol("n$gpos"))  # Dynamically get field `nᵢ`
+            Fencᵧ = Main.coll_freq_concentration_parameterisation(model_fields, gpos)
+            Fcollᵧ = Fencᵧ .* nᵧ
+            Fcollgsum = Fcollgsum .+ gVolconsts[gindx] * Fcollᵧ
+        end
     end
 
 
@@ -81,7 +92,7 @@ function nintermediate_forcing_func(i, j, k, grid, clock, model_fields, indx)
     if Main.crystal_size_collision_redistribution == 1
         dn_coll = - Main.V₁/Vᵢ * Fcoll/Main.volume
     else
-        dn_coll = (Main.αVolconst[indx] * Fcoll .+ Fcollβsum) / Main.volume
+        dn_coll = (Main.αVolconst[indx] * Fcoll .+ Fcollβsum .+ Fcollgsum) / Main.volume
     end
     #print("n2", maximum(dn_coll))
 

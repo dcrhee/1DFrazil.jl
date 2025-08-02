@@ -2,3 +2,7 @@
 *.jld2
 *.eps
 *.mp4
+*.pdf
+*.npy
+*.xlsx
+*.docx

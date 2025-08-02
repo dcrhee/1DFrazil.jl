@@ -29,6 +29,7 @@ function get_Fenc_effective_radius_collision_velocity_parameterisation_num_3(ind
 end
 
 function get_Fenc_average_radius_collision_velocity_parameterisation_num_3(indx, Rindx)
+    Rs = Main.Rs
     vcoll_matrix = Main.vcoll_matrix
     radii_efficiency = Main.radii_efficiency
     if indx == Rindx
@@ -52,6 +53,7 @@ end
 
 
 function get_Fenc_average_radius_collision_velocity_parameterisation_num_12(indx, Rindx)
+    Rs = Main.Rs
     vcoll_matrix = Main.vcoll_matrix
     radii_efficiency = Main.radii_efficiency
     if indx == Rindx
@@ -86,6 +88,7 @@ function get_Fenc_collision_velocity_parameterisation_num_12(indx, Rindx)
 end
 
 function get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_3(indx)
+    Rs = Main.Rs
     vcoll_matrix = Main.vcoll_matrix
     radii_efficiency = Main.radii_efficiency
     #Fenc =  (3/(2*aspect_ratio))^(2/3) * 2*π*(Rs[indx])^2 * vcoll * ntot
@@ -108,6 +111,7 @@ function get_Fenc_p1_collision_velocity_parameterisation_num_3(indx)
 end
 
 function get_Fenc_p1_average_radius_collision_velocity_parameterisation_num_12(indx)
+    Rs = Main.Rs
     vcoll_matrix = Main.vcoll_matrix
     radii_efficiency = Main.radii_efficiency
     #Fenc = (3/(2*aspect_ratio))^(2/3) *π*(Rs[indx])^2 * vcoll * ntot

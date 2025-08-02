@@ -26,13 +26,13 @@ using .setupSimulation
 using MAT
 using JLD2
 
-file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/Code/ODE_solve_interpolate/fall_off/arc/collisionEfficiencyScatteredInterpolate.mat")  # open the .mat file
-collision_efficiency = read(file, "collisionEfficiencyScatteredInterpolate")  # read a specific variable from the file
-close(file)
+#file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/Code/ODE_solve_interpolate/fall_off/arc/collisionEfficiencyScatteredInterpolate.mat")  # open the .mat file
+#collision_efficiency = read(file, "collisionEfficiencyScatteredInterpolate")  # read a specific variable from the file
+#close(file)
 
-file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/cylinder_ballistic/radiimatd50.mat")  # open the .mat file
-radii_efficiency = read(file, "radiimat")  # read a specific variable from the file
-close(file)
+#file = matopen("/Users/cotton/Documents/DPhil/Polynas/Code/non_eqm/Rotation/Full 3D/matlab_full_rot/cylinder_ballistic/radiimatd50.mat")  # open the .mat file
+#radii_efficiency = read(file, "radiimat")  # read a specific variable from the file
+#close(file)
 
 # setup grid: choose 128 data points
 depth = 0.20
@@ -51,7 +51,7 @@ Vs = π * Rs.^2 .* Hs
 V₁ = Vs[1]
 Vₙ = Vs[end]
 
-ϵ = 1e-4#7.4 * 1e-6 #10^-3 # m²s⁻³
+ϵ = 1e-5#7.4 * 1e-6 #10^-3 # m²s⁻³
 ν = 1.95 * 1e-6
 Cᵢₙ =  4 * 1e-8 # initialise with the same total number
 Cᵢₙ =  0.001632178703736923 # initialise with the same total concentration sum(nᵢₙ .* Vs) and use nin from model
@@ -65,21 +65,25 @@ Vrem = ζ * V₁
 const effective_areas = find_mean_collision_radius(Rs, aspect_ratio)
 #collision_efficiency = find_collision_efficiency(Rs)
 #vgs = find_steady_velocity_via_iteration(Rs, ν, ρₒ, ρᵢ, grav, aspect_ratio)
+#vgos = find_vgosink(Rs, ν, ρₒ, ρᵢ, grav, aspect_ratio)
+#vstokes = find_vstokes(Rs, ν, ρₒ, ρᵢ, grav, aspect_ratio)
+#vgs = velocity_transition(vgos, vstokes, 2*Rs .* vgos/ν)
 
-#@save "vgs200.jld2" vgs  # Saves variable `vgs`
-@load "vgs200.jld2" vgs  # Loads it back
+#@save "vmixed.jld2" vgs  # Saves variable `vgs`
+@load "vmixed.jld2" vgs  # Loads it back
 
 coriolis = FPlane(f=-1.4e-4) # s⁻¹
 
-cvelnum = 1 # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
-pnum = 1 # 1 is mean n, 2 is sum over nj
+cvelnum = 3 # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
+pnum = 2 # 1 is mean n, 2 is sum over nj
 
-end_name = "sameConc_fast_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
+end_name = "new_v_same_C_just_collisions_epsilon" * string(ϵ) * "_" * string(numSizeClasses)
 
 collision_velocity_parameterisation_num = cvelnum # 1 is old cylinder, 2 is new cylinder, 3 is new spherical
 concentration_parameterisation_num = pnum # 1 is mean n, 2 is sum over nj
 crystal_size_collision_redistribution = 1 # 1 is old redistribution, 2 is new redistribution
-efficiency_radius = true # use their equivalent radius
+effective_radius = true
+efficiency_radius = false # use their equivalent radius
 max_radius = false # use their averaged radius
 
 if collision_velocity_parameterisation_num == 2
@@ -259,8 +263,10 @@ set!(model, ; u=0, v=0, w=0, T=Tᵢ, S=34.5, ninitial...)
 #simulation = Simulation(model, Δt=1.0, stop_time=100000minutes)
 
 # if initialise with the same C
-simulation = Simulation(model, Δt=1.0, stop_time=20minutes)
+simulation = Simulation(model, Δt=1.0, stop_time=5000minutes) # for 1e-5
+#simulation = Simulation(model, Δt=1.0, stop_time=40minutes) # for 1e-4
 #simulation = Simulation(model, Δt=1.0, stop_time=15minutes)
+#simulation = Simulation(model, Δt=1.0, stop_time=1minutes)
 #simulation = Simulation(model, Δt=1.0, stop_time=10minutes)
 
 # Create the simulation
@@ -271,16 +277,18 @@ add_callback!(simulation, enforce_nonnegative_tracer, IterationInterval(1))
 add_callback!(simulation, progress, IterationInterval(1))
 
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=24hours) # for n = 1, p = 2
-#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.1minute) # for n = 1, p = 2
+conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=1minute) # for n = 1, p = 2
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.02minute) # for n = 1, p = 2
 
 #conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2
-conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.01minute) # for n = 1, p = 2
+#conjure_time_step_wizard!(simulation, cfl=1.0, max_Δt=0.001minute) # for n = 1, p = 2
 
 #simulation.callbacks[:progress] = Callback(progress, IterationInterval(20))
 
 #output_interval = 24hours
-#output_interval = 0.1minutes
-output_interval = 0.01minutes
+output_interval = 1minutes
+#output_interval = 0.02minutes
+#output_interval = 0.001minutes
 
 fields_to_output = merge(model.velocities, model.tracers)
 
@@ -297,3 +305,5 @@ S = model.tracers.S
 run!(simulation)
 #end
 #endPh
+
+# 1e-8 up to 45 mins
